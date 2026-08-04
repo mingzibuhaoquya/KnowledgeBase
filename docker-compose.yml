@@ -1,0 +1,87 @@
+name: knowledgebase
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: knowledgebase-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-knowledgebase_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-knowledge_base}
+      MYSQL_USER: ${MYSQL_USER:-knowledgebase}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-knowledgebase_pass}
+    ports:
+      - "${KB_MYSQL_PORT:-3318}:3306"
+    volumes:
+      - knowledgebase-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-knowledgebase_root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.5
+    container_name: knowledgebase-qdrant
+    restart: unless-stopped
+    ports:
+      - "${KB_QDRANT_HTTP_PORT:-6338}:6333"
+      - "${KB_QDRANT_GRPC_PORT:-6339}:6334"
+    volumes:
+      - knowledgebase-qdrant-data:/qdrant/storage
+
+  redis:
+    image: redis:7-alpine
+    container_name: knowledgebase-redis
+    restart: unless-stopped
+    profiles: ["worker"]
+    ports:
+      - "${KB_REDIS_PORT:-6388}:6379"
+    volumes:
+      - knowledgebase-redis-data:/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: knowledgebase-backend
+    restart: unless-stopped
+    profiles: ["app"]
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-knowledgebase}:${MYSQL_PASSWORD:-knowledgebase_pass}@mysql:3306/${MYSQL_DATABASE:-knowledge_base}?charset=utf8mb4
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: knowledge_chunks
+      UPLOAD_ROOT: /app/uploads/knowledge
+      SECRET_KEY: ${SECRET_KEY:-change-me-before-production}
+    ports:
+      - "${KB_BACKEND_PORT:-8018}:8000"
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://127.0.0.1:8018/api/v1}
+    container_name: knowledgebase-frontend
+    restart: unless-stopped
+    profiles: ["app"]
+    ports:
+      - "${KB_FRONTEND_PORT:-5188}:80"
+    depends_on:
+      - backend
+
+volumes:
+  knowledgebase-mysql-data:
+    name: knowledgebase-mysql-data
+  knowledgebase-qdrant-data:
+    name: knowledgebase-qdrant-data
+  knowledgebase-redis-data:
+    name: knowledgebase-redis-data
+

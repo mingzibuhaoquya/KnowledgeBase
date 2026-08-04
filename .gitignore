@@ -1,0 +1,17 @@
+.env
+.venv/
+.idea/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+backend/app.db
+backend/knowledgebase.db
+testfileandquestions/
+uploads/knowledge/*
+!uploads/knowledge/.gitkeep
