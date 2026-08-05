@@ -5,31 +5,31 @@
         v-model="searchText"
         :prefix-icon="Search"
         clearable
-        placeholder="Search knowledge before asking"
+        placeholder="提问前可先检索知识库"
         @keyup.enter="runSearch"
       />
-      <el-button :icon="Search" @click="runSearch">Search</el-button>
+      <el-button :icon="Search" @click="runSearch">检索</el-button>
     </section>
 
     <div v-if="searchResults.length" class="search-results">
       <button v-for="item in searchResults" :key="`${item.document_id}-${item.chunk_id}`" class="search-result" @click="emit('select-document', item.document_id)">
         <strong>{{ item.title }}</strong>
-        <span>{{ item.match_reason || item.source }} · score {{ item.score.toFixed(1) }}</span>
+        <span>{{ item.match_reason || item.source }} / 分数 {{ item.score.toFixed(1) }}</span>
         <span>{{ item.snippet || item.original_filename }}</span>
       </button>
     </div>
 
     <section class="chat-toolbar">
       <el-radio-group v-model="scope" size="small">
-        <el-radio-button label="document">Current document</el-radio-button>
-        <el-radio-button label="all">All knowledge</el-radio-button>
+        <el-radio-button label="document">当前文档</el-radio-button>
+        <el-radio-button label="all">全库</el-radio-button>
       </el-radio-group>
-      <el-tag type="info">{{ scope === 'document' ? document.title : 'All documents' }}</el-tag>
+      <el-tag type="info">{{ scope === 'document' ? document.title : '全部文档' }}</el-tag>
     </section>
 
     <el-scrollbar class="chat-history">
       <div v-for="message in messages" :key="message.id" class="chat-message" :class="message.role">
-        <div class="message-role">{{ message.role === 'user' ? 'Me' : 'Knowledge Assistant' }}</div>
+        <div class="message-role">{{ message.role === 'user' ? '我' : '知识助手' }}</div>
         <pre>{{ message.content }}</pre>
         <div v-if="message.sources?.length" class="source-list">
           <button v-for="source in message.sources" :key="`${message.id}-${source.document_id}-${source.chunk_id}`" @click="emit('select-document', source.document_id)">
@@ -37,12 +37,12 @@
           </button>
         </div>
         <div v-if="message.role === 'assistant'" class="feedback-actions">
-          <el-button size="small" @click="feedback(message.id, 'useful')">Useful</el-button>
-          <el-button size="small" @click="feedback(message.id, 'not_useful')">Not useful</el-button>
-          <el-button size="small" @click="feedback(message.id, 'wrong')">Wrong</el-button>
+          <el-button size="small" @click="feedback(message.id, 'useful')">有用</el-button>
+          <el-button size="small" @click="feedback(message.id, 'not_useful')">无用</el-button>
+          <el-button size="small" @click="feedback(message.id, 'wrong')">错误</el-button>
         </div>
       </div>
-      <el-empty v-if="!messages.length" description="Ask about rules, exceptions, API behavior, or test focus." />
+      <el-empty v-if="!messages.length" description="可以询问需求规则、异常处理、接口字段、测试关注点。" />
     </el-scrollbar>
 
     <section class="chat-input">
@@ -51,10 +51,10 @@
         type="textarea"
         :rows="3"
         resize="none"
-        placeholder="Ask the knowledge base. Ctrl+Enter to send."
+        placeholder="向知识库提问，Ctrl+Enter 发送"
         @keydown.ctrl.enter.prevent="ask"
       />
-      <el-button type="primary" :icon="Promotion" :loading="asking" @click="ask">Ask</el-button>
+      <el-button type="primary" :icon="Promotion" :loading="asking" @click="ask">提问</el-button>
     </section>
   </div>
 </template>
@@ -98,7 +98,7 @@ async function runSearch() {
 async function ask() {
   const text = question.value.trim()
   if (!text) {
-    ElMessage.warning('Please enter a question')
+    ElMessage.warning('请输入问题')
     return
   }
   asking.value = true
@@ -114,7 +114,7 @@ async function ask() {
     messages.value.push(response.question, response.answer)
     question.value = ''
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.detail || 'Question failed. Check backend or AI config.')
+    ElMessage.error(error?.response?.data?.detail || '提问失败，请检查后端服务或模型配置')
   } finally {
     asking.value = false
   }
@@ -122,6 +122,6 @@ async function ask() {
 
 async function feedback(messageId: number, rating: string) {
   await saveChatFeedback(messageId, { rating })
-  ElMessage.success('Feedback recorded')
+  ElMessage.success('反馈已记录')
 }
 </script>

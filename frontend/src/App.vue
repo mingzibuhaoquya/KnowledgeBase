@@ -2,22 +2,22 @@
   <main class="app-shell">
     <section class="topbar">
       <div>
-        <h1>KnowledgeBase</h1>
-        <p>R&D testing knowledge, trusted search, and source-grounded AI answers.</p>
+        <h1>研发测试知识库</h1>
+        <p>需求沉淀、接口检索、AI 问答、来源引用和测试用例草稿。</p>
       </div>
       <div class="top-actions">
-        <el-tag v-if="currentUser" type="success">{{ currentUser.username }} · {{ currentUser.role }}</el-tag>
-        <el-button :icon="UserIcon" @click="loginVisible = true">Login</el-button>
-        <el-button :icon="Setting" @click="configVisible = true">AI Config</el-button>
+        <el-tag v-if="currentUser" type="success">{{ currentUser.username }} / {{ currentUser.role }}</el-tag>
+        <el-button :icon="UserIcon" @click="loginVisible = true">登录</el-button>
+        <el-button :icon="Setting" @click="configVisible = true">模型配置</el-button>
       </div>
     </section>
 
     <el-tabs v-model="activeView" class="main-tabs">
-      <el-tab-pane label="Workbench" name="workbench">
+      <el-tab-pane label="知识工作台" name="workbench">
         <KnowledgeWorkbench @select-document="openDocument" />
       </el-tab-pane>
 
-      <el-tab-pane label="Documents" name="documents">
+      <el-tab-pane label="文档库" name="documents">
         <section class="workspace">
           <DocumentPanel
             :documents="documents"
@@ -39,23 +39,23 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="AI Chat" name="chat">
+      <el-tab-pane label="AI 问答" name="chat">
         <section class="full-panel">
           <KnowledgeChat
             v-if="activeDocument"
             :document="activeDocument"
             @select-document="openDocument"
           />
-          <el-empty v-else description="Select a document first, or search from the workbench." />
+          <el-empty v-else description="请先选择一个文档，或在知识工作台中检索。" />
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="Governance" name="admin">
+      <el-tab-pane label="治理中心" name="admin">
         <AdminCenter @select-document="openDocument" />
       </el-tab-pane>
     </el-tabs>
 
-    <el-drawer v-model="detailVisible" size="72%" title="Knowledge Detail">
+    <el-drawer v-model="detailVisible" size="72%" title="知识详情">
       <DocumentDetail
         :document="activeDocument"
         :cases="cases"
@@ -129,7 +129,7 @@ async function handleGenerate(maxCases: number) {
   try {
     cases.value = await generateCases(activeDocument.value.id, maxCases)
     await loadDocuments()
-    ElMessage.success('Test case drafts generated')
+    ElMessage.success('测试用例草稿已生成')
   } finally {
     detailLoading.value = false
   }
@@ -139,7 +139,7 @@ async function handleSaveCase(item: TestCaseDraft) {
   const saved = await updateCase(item)
   const index = cases.value.findIndex((entry) => entry.id === saved.id)
   if (index >= 0) cases.value[index] = saved
-  ElMessage.success('Case saved')
+  ElMessage.success('用例已保存')
 }
 
 async function handleReindex(documentId: number) {
@@ -147,7 +147,7 @@ async function handleReindex(documentId: number) {
   try {
     activeDocument.value = await reindexDocument(documentId)
     await loadDocuments()
-    ElMessage.success('Index rebuilt')
+    ElMessage.success('索引已重建')
   } finally {
     detailLoading.value = false
   }
