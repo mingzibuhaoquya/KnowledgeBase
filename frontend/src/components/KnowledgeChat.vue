@@ -30,7 +30,7 @@
     <el-scrollbar class="chat-history">
       <div v-for="message in messages" :key="message.id" class="chat-message" :class="message.role">
         <div class="message-role">{{ message.role === 'user' ? '我' : '知识助手' }}</div>
-        <pre>{{ message.content }}</pre>
+        <div class="message-content" v-html="renderMessage(message.content)" />
         <div v-if="message.sources?.length" class="source-list">
           <button v-for="source in message.sources" :key="`${message.id}-${source.document_id}-${source.chunk_id}`" @click="emit('select-document', source.document_id)">
             {{ source.title }}{{ source.chunk_id ? ` #${source.chunk_id}` : '' }}
@@ -123,5 +123,89 @@ async function ask() {
 async function feedback(messageId: number, rating: string) {
   await saveChatFeedback(messageId, { rating })
   ElMessage.success('反馈已记录')
+}
+
+function renderMessage(content: string) {
+  return renderMarkdownLite(content || '')
+}
+
+function renderMarkdownLite(content: string) {
+  const lines = content.replace(/\r\n/g, '\n').split('\n')
+  const blocks: string[] = []
+  let index = 0
+
+  while (index < lines.length) {
+    if (isTableStart(lines, index)) {
+      const tableLines = [lines[index], lines[index + 1]]
+      index += 2
+      while (index < lines.length && isTableRow(lines[index])) {
+        tableLines.push(lines[index])
+        index += 1
+      }
+      blocks.push(renderTable(tableLines))
+      continue
+    }
+
+    const line = lines[index]
+    if (!line.trim()) {
+      blocks.push('<br />')
+    } else if (/^\s*[-*]\s+/.test(line)) {
+      const items = []
+      while (index < lines.length && /^\s*[-*]\s+/.test(lines[index])) {
+        items.push(`<li>${inlineFormat(lines[index].replace(/^\s*[-*]\s+/, ''))}</li>`)
+        index += 1
+      }
+      blocks.push(`<ul>${items.join('')}</ul>`)
+      continue
+    } else if (/^\s*\d+\.\s+/.test(line)) {
+      const items = []
+      while (index < lines.length && /^\s*\d+\.\s+/.test(lines[index])) {
+        items.push(`<li>${inlineFormat(lines[index].replace(/^\s*\d+\.\s+/, ''))}</li>`)
+        index += 1
+      }
+      blocks.push(`<ol>${items.join('')}</ol>`)
+      continue
+    } else {
+      blocks.push(`<p>${inlineFormat(line)}</p>`)
+    }
+    index += 1
+  }
+
+  return blocks.join('')
+}
+
+function isTableStart(lines: string[], index: number) {
+  return isTableRow(lines[index]) && index + 1 < lines.length && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1])
+}
+
+function isTableRow(line: string) {
+  return line.includes('|') && line.split('|').filter((cell) => cell.trim()).length >= 2
+}
+
+function renderTable(lines: string[]) {
+  const headers = splitTableRow(lines[0])
+  const bodyRows = lines.slice(2).map(splitTableRow)
+  const head = `<thead><tr>${headers.map((cell) => `<th>${inlineFormat(cell)}</th>`).join('')}</tr></thead>`
+  const body = `<tbody>${bodyRows.map((row) => `<tr>${row.map((cell) => `<td>${inlineFormat(cell)}</td>`).join('')}</tr>`).join('')}</tbody>`
+  return `<div class="message-table-wrap"><table>${head}${body}</table></div>`
+}
+
+function splitTableRow(line: string) {
+  return line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((cell) => cell.trim())
+}
+
+function inlineFormat(text: string) {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+}
+
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 </script>
