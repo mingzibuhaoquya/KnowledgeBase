@@ -25,8 +25,8 @@ class VectorStore:
         self._ensure_collection(len(sample_vector))
         points = []
         for chunk in chunks:
-            vector_id = f"chunk-{chunk.id}"
-            chunk.vector_id = vector_id
+            vector_id = chunk.id
+            chunk.vector_id = str(vector_id)
             points.append(
                 {
                     "id": vector_id,

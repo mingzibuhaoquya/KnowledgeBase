@@ -1,5 +1,6 @@
-import shutil
 import csv
+import re
+import shutil
 import uuid
 import zipfile
 from dataclasses import dataclass, field
@@ -76,6 +77,15 @@ class DocumentParser:
             images=images,
         )
 
+    def reparse_existing(self, file_path: str, file_type: str) -> str:
+        path = Path(file_path)
+        suffix = f".{file_type.lower().lstrip('.')}"
+        if not path.exists():
+            return ""
+        if suffix not in self.allowed_suffixes:
+            return ""
+        return self._extract_text(path, suffix).strip()
+
     def _sha256(self, file_path: Path) -> str:
         import hashlib
 
@@ -105,14 +115,224 @@ class DocumentParser:
             return "[python-docx is not installed. Cannot parse docx text.]"
 
         doc = Document(str(file_path))
-        paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-        table_lines: list[str] = []
-        for table in doc.tables:
-            for row in table.rows:
-                cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-                if cells:
-                    table_lines.append(" | ".join(cells))
-        return "\n".join(paragraphs + table_lines)
+        sections: list[str] = []
+        context_title = ""
+        context_section = ""
+        context_meta: dict[str, str] = {}
+        pending_meta_key = ""
+        table_index = 0
+        for block in self._iter_docx_blocks(doc):
+            if hasattr(block, "text"):
+                text = block.text.strip()
+                if not text:
+                    continue
+                sections.append(text)
+                if pending_meta_key:
+                    context_meta[pending_meta_key] = text
+                    pending_meta_key = ""
+                    continue
+                if self._is_interface_heading(text):
+                    context_title = text
+                    context_meta = {}
+                    context_section = ""
+                if text == "交易方向":
+                    pending_meta_key = "Transaction direction"
+                    continue
+                if text == "接口类型":
+                    pending_meta_key = "Interface type"
+                    continue
+                if "请求报文" in text or "请求参数" in text or text.upper() == "REQUEST":
+                    context_section = "REQUEST"
+                elif "应答报文" in text or "响应报文" in text or "返回报文" in text or text.upper() == "RESPONSE":
+                    context_section = "RESPONSE"
+            else:
+                table_index += 1
+                table_text = self._format_docx_table(block, table_index, context_title, context_section, context_meta)
+                if table_text:
+                    sections.append(table_text)
+        return "\n\n".join(sections)
+
+    def _iter_docx_blocks(self, doc):
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+        from docx.oxml.table import CT_Tbl
+        from docx.oxml.text.paragraph import CT_P
+
+        body = doc.element.body
+        for child in body.iterchildren():
+            if isinstance(child, CT_P):
+                yield Paragraph(child, doc)
+            elif isinstance(child, CT_Tbl):
+                yield Table(child, doc)
+
+    def _format_docx_table(
+        self,
+        table,
+        index: int,
+        context_title: str = "",
+        context_section: str = "",
+        context_meta: dict[str, str] | None = None,
+    ) -> str:
+        rows: list[list[str]] = []
+        for row in table.rows:
+            cells = [self._clean_cell(cell.text) for cell in row.cells]
+            cells = self._dedupe_repeated_cells(cells)
+            if any(cells):
+                rows.append(cells)
+        if not rows:
+            return ""
+
+        title = self._table_title(rows, index)
+        interface_name = self._interface_name(rows, context_title)
+        lines = [f"[TABLE:{index}] {title}"]
+        if interface_name:
+            lines.append(f"Interface name: {interface_name}")
+        for key, value in (context_meta or {}).items():
+            if value:
+                lines.append(f"{key}: {value}")
+        if context_section:
+            lines.append(f"Interface section: {context_section}")
+        elif self._looks_like_request(rows):
+            lines.append("Interface section: REQUEST")
+        elif self._looks_like_response(rows):
+            lines.append("Interface section: RESPONSE")
+        header_index = self._header_index(rows)
+        if header_index is not None:
+            header = rows[header_index]
+            lines.append("Columns: " + " | ".join(cell for cell in header if cell))
+            for row_number, row in enumerate(rows[header_index + 1 :], start=1):
+                values = self._normalize_row(row, len(header))
+                if not any(values):
+                    continue
+                mapped = self._map_table_row(header, values)
+                if mapped:
+                    lines.append(f"Row {row_number}: " + " | ".join(f"{key}: {value}" for key, value in mapped))
+                else:
+                    lines.append(f"Row {row_number}: " + " | ".join(value for value in values if value))
+        else:
+            for row_number, row in enumerate(rows, start=1):
+                values = [value for value in row if value]
+                if values:
+                    lines.append(f"Row {row_number}: " + " | ".join(values))
+        lines.append(f"[/TABLE:{index}]")
+        return "\n".join(lines)
+
+    def _clean_cell(self, text: str) -> str:
+        return re.sub(r"\s+", " ", text or "").strip()
+
+    def _dedupe_repeated_cells(self, cells: list[str]) -> list[str]:
+        deduped: list[str] = []
+        previous = object()
+        for cell in cells:
+            if cell == previous:
+                continue
+            deduped.append(cell)
+            previous = cell
+        return deduped
+
+    def _table_title(self, rows: list[list[str]], index: int) -> str:
+        flat = " ".join(cell for row in rows[:3] for cell in row if cell)
+        if "REQUEST" in flat.upper():
+            return "Interface request fields"
+        if "RESPONSE" in flat.upper():
+            return "Interface response fields"
+        if any(name in flat for name in ["中文域名", "标签名", "是否必输", "字段"]):
+            return "Interface fields"
+        return f"Table {index}"
+
+    def _interface_name(self, rows: list[list[str]], context_title: str) -> str:
+        flat = " ".join(cell for row in rows[:6] for cell in row if cell)
+        patterns = [
+            r"接口名称[:：]\s*([^|，,。；;\n]+)",
+            r"接口名[:：]\s*([^|，,。；;\n]+)",
+            r"接口[:：]\s*([^|，,。；;\n]+)",
+            r"([A-Za-z0-9_./-]+(?:接口|Service|API))",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, flat)
+            if match:
+                return match.group(1).strip()
+        if context_title and ("接口" in context_title or "查询" in context_title or "申请" in context_title):
+            return context_title[:120]
+        return ""
+
+    def _looks_like_request(self, rows: list[list[str]]) -> bool:
+        flat = " ".join(cell for row in rows[:5] for cell in row if cell).upper()
+        return "<REQUEST>" in flat or "REQUEST" in flat or "请求" in flat
+
+    def _looks_like_response(self, rows: list[list[str]]) -> bool:
+        flat = " ".join(cell for row in rows[:5] for cell in row if cell).upper()
+        return "<RESPONSE>" in flat or "RESPONSE" in flat or "返回" in flat or "响应" in flat
+
+    def _last_interface_title(self, paragraphs: list[str]) -> str:
+        for text in reversed(paragraphs[-30:]):
+            clean = text.strip()
+            if not clean:
+                continue
+            if self._is_interface_heading(clean):
+                return clean
+        return ""
+
+    def _is_interface_heading(self, text: str) -> bool:
+        clean = text.strip()
+        generic_labels = {
+            "接口类型",
+            "请求报文",
+            "应答报文",
+            "响应报文",
+            "返回报文",
+            "交易方向",
+            "校验规则",
+            "业务功能描述",
+            "界面描述",
+            "Webservice接口",
+        }
+        if clean in generic_labels:
+            return False
+        return len(clean) <= 120 and (
+            "服务接口" in clean
+            or "接口服务" in clean
+            or "接口【" in clean
+            or "接口[" in clean
+            or "查询" in clean
+            or "申请" in clean
+            or re.search(r"^\d+(?:\.\d+)+", clean) is not None
+        )
+
+    def _header_index(self, rows: list[list[str]]) -> int | None:
+        for index, row in enumerate(rows[:8]):
+            joined = "|".join(row)
+            if ("中文域名" in joined and "标签名" in joined) or ("字段" in joined and "说明" in joined):
+                return index
+            if sum(1 for cell in row if cell) >= 3 and any("说明" in cell or "备注" in cell for cell in row):
+                return index
+        return None
+
+    def _normalize_row(self, row: list[str], size: int) -> list[str]:
+        values = list(row[:size])
+        if len(values) < size:
+            values.extend([""] * (size - len(values)))
+        return values
+
+    def _map_table_row(self, header: list[str], row: list[str]) -> list[tuple[str, str]]:
+        aliases = {
+            "序号": "index",
+            "中文域名": "field_cn",
+            "中文名称": "field_cn",
+            "标签名": "field_code",
+            "字段名": "field_code",
+            "长度": "length",
+            "是否必输": "required",
+            "说明": "description",
+            "备注": "description",
+        }
+        mapped: list[tuple[str, str]] = []
+        for name, value in zip(header, row):
+            if not value:
+                continue
+            key = aliases.get(name.strip(), name.strip() or "value")
+            mapped.append((key, value))
+        return mapped
 
     def _extract_pdf_text(self, file_path: Path) -> str:
         try:

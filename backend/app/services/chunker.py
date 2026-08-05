@@ -43,6 +43,27 @@ class Chunker:
         return [item for item, _ in sorted(scores.items(), key=lambda pair: pair[1], reverse=True)[:limit]]
 
     def _sections(self, text: str) -> list[tuple[str, str]]:
+        table_sections = self._table_sections(text)
+        if table_sections:
+            return table_sections
+        return self._plain_sections(text) or [("正文", text)]
+
+    def _table_sections(self, text: str) -> list[tuple[str, str]]:
+        sections: list[tuple[str, str]] = []
+        cursor = 0
+        for match in re.finditer(r"(?s)\[TABLE:(\d+)\].*?\[/TABLE:\1\]", text):
+            prefix = text[cursor : match.start()].strip()
+            if prefix:
+                sections.extend(self._plain_sections(prefix))
+            block = match.group(0).strip()
+            sections.append((self._table_title_path(block), block))
+            cursor = match.end()
+        suffix = text[cursor:].strip()
+        if suffix:
+            sections.extend(self._plain_sections(suffix))
+        return sections
+
+    def _plain_sections(self, text: str) -> list[tuple[str, str]]:
         sections: list[tuple[str, str]] = []
         current_title = "正文"
         buffer: list[str] = []
@@ -59,10 +80,33 @@ class Chunker:
                 buffer.append(stripped)
         if buffer:
             sections.append((current_title, "\n".join(buffer)))
-        return sections or [("正文", text)]
+        return sections
 
-    def _window(self, text: str, max_chars: int = 900, overlap: int = 120) -> list[str]:
+    def _table_title_path(self, block: str) -> str:
+        first_line = block.splitlines()[0].replace("[", "").replace("]", "")
+        interface = self._extract_marker(block, "Interface name")
+        direction = self._extract_marker(block, "Transaction direction")
+        interface_type = self._extract_marker(block, "Interface type")
+        section = self._extract_marker(block, "Interface section")
+        parts = [first_line]
+        if interface:
+            parts.append(interface)
+        if direction:
+            parts.append(direction)
+        if interface_type:
+            parts.append(interface_type)
+        if section:
+            parts.append(section)
+        return " / ".join(parts)[:500]
+
+    def _extract_marker(self, block: str, name: str) -> str:
+        match = re.search(rf"^{re.escape(name)}:\s*(.+)$", block, flags=re.MULTILINE)
+        return match.group(1).strip() if match else ""
+
+    def _window(self, text: str, max_chars: int = 1200, overlap: int = 160) -> list[str]:
         clean = text.strip()
+        if clean.startswith("[TABLE:"):
+            return [clean]
         if len(clean) <= max_chars:
             return [clean]
         pieces: list[str] = []
@@ -76,8 +120,7 @@ class Chunker:
         return pieces
 
     def _looks_like_heading(self, line: str) -> bool:
-        return bool(re.match(r"^(#{1,6}\s+|[一二三四五六七八九十]+[、.．]|[0-9]+[.．、]\s*)", line)) and len(line) <= 80
+        return bool(re.match(r"^(#{1,6}\s+|[一二三四五六七八九十]+[、.．]\s*|[0-9]+[.．、]\s*)", line)) and len(line) <= 100
 
 
 chunker = Chunker()
-

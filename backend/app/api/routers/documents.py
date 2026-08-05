@@ -178,6 +178,11 @@ def reindex_document(document_id: int, db: Session = Depends(get_db)) -> Knowled
     if not document:
         raise HTTPException(status_code=404, detail="document not found")
     version = db.get(DocumentVersion, document.current_version_id) if document.current_version_id else None
+    reparsed_text = document_parser.reparse_existing(document.file_path, document.file_type)
+    if reparsed_text:
+        document.content_text = reparsed_text
+        if version:
+            version.content_text = reparsed_text
     indexing_service.index_document(db, document, version)
     db.commit()
     return _load_document(db, document_id)
