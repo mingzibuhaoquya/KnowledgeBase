@@ -227,7 +227,7 @@ class KnowledgeSearchService:
                     continue
                 seen.add(key)
                 keywords.append(term)
-                if len(keywords) >= 12:
+                if len(keywords) >= 20:
                     return keywords
         return keywords
 
@@ -252,8 +252,25 @@ class KnowledgeSearchService:
             "展示",
             "需求",
             "测试",
+            "入参",
+            "出参",
+            "参数",
+            "字段",
+            "请求",
+            "响应",
+            "返回",
+            "报文",
         ]
+        mapped_terms = []
+        if any(term in word for term in ["入参", "请求", "请求参数"]):
+            mapped_terms.extend(["REQUEST", "Interface request fields"])
+        if any(term in word for term in ["出参", "响应", "返回", "返回字段"]):
+            mapped_terms.extend(["RESPONSE", "Interface response fields"])
+        if any(term in word for term in ["参数", "字段", "报文"]):
+            mapped_terms.extend(["field_code", "field_cn", "Columns"])
+
         terms = [term for term in preferred if term in word]
+        terms.extend(mapped_terms)
         terms.extend(word[index : index + 2] for index in range(0, min(len(word) - 1, 10)))
         return terms
 

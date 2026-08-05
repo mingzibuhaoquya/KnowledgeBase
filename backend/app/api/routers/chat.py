@@ -17,6 +17,7 @@ from app.schemas import (
     ChatSourceOut,
 )
 from app.services.llm import llm_service
+from app.services.interface_answer import augment_interface_hits, build_interface_answer
 from app.services.search import knowledge_search
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -61,13 +62,17 @@ def ask_knowledge(payload: ChatAskRequest, db: Session = Depends(get_db)) -> Cha
         document = db.get(KnowledgeDocument, target_document_id)
         if document:
             hits = knowledge_search.search(db, document.title, limit=payload.top_k)
+    hits = augment_interface_hits(db, payload.question, hits, document_id=target_document_id, limit=payload.top_k)
 
     sources = [
         ChatSourceOut(document_id=hit.document.id, chunk_id=hit.chunk_id, title=hit.document.title, snippet=hit.snippet)
         for hit in hits
     ]
     context_blocks = [_context_block(db, source) for source in sources]
-    answer_text, answer_source = llm_service.answer(db, payload.question, context_blocks)
+    answer_text = build_interface_answer(db, payload.question, sources)
+    answer_source = "structured" if answer_text else "ai"
+    if not answer_text:
+        answer_text, answer_source = llm_service.answer(db, payload.question, context_blocks)
 
     question = ChatMessage(session_id=session.id, role="user", content=payload.question, document_id=target_document_id, sources="[]")
     answer = ChatMessage(
@@ -77,7 +82,7 @@ def ask_knowledge(payload: ChatAskRequest, db: Session = Depends(get_db)) -> Cha
         document_id=target_document_id,
         sources=json.dumps([source.model_dump() for source in sources], ensure_ascii=False),
     )
-    if answer_source != "ai":
+    if answer_source not in {"ai", "structured"}:
         answer.content = f"{answer.content}\n\nAnswer source: {answer_source}"
     db.add_all([question, answer])
     db.commit()
