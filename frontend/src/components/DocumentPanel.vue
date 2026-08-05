@@ -49,7 +49,7 @@
         <span class="doc-meta">
           {{ item.file_type.toUpperCase() }} / {{ formatSize(item.file_size) }} / {{ statusText(item.status) }}
         </span>
-        <span class="doc-meta">切片 {{ item.chunk_count }} / 图片 {{ item.image_count }} / 用例 {{ item.test_case_count }}</span>
+        <span class="doc-meta">切片 {{ item.chunk_count }} / 图片 {{ item.image_count }}</span>
         <span class="doc-meta">{{ item.project || '未设置项目' }} / {{ item.module || '未设置模块' }}</span>
         <span v-if="item.tags" class="doc-tags">{{ item.tags }}</span>
       </button>

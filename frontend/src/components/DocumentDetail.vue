@@ -15,8 +15,6 @@
         </div>
         <div class="generate-tools">
           <el-button :icon="Refresh" @click="emit('reindex', document.id)">重建索引</el-button>
-          <el-input-number v-model="maxCases" :min="1" :max="30" size="small" />
-          <el-button type="primary" :icon="MagicStick" @click="emit('generate', maxCases)">生成用例草稿</el-button>
         </div>
       </div>
 
@@ -77,50 +75,6 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="测试用例草稿" name="cases">
-          <div class="case-list">
-            <el-card v-for="item in cases" :key="item.id" shadow="never" class="case-card">
-              <el-form label-width="88px" label-position="left">
-                <div class="case-title-line">
-                  <el-input v-model="item.title" placeholder="用例标题" />
-                  <el-select v-model="item.priority" class="priority-select">
-                    <el-option label="P0" value="P0" />
-                    <el-option label="P1" value="P1" />
-                    <el-option label="P2" value="P2" />
-                    <el-option label="P3" value="P3" />
-                  </el-select>
-                  <el-select v-model="item.status" class="status-select">
-                    <el-option label="草稿" value="draft" />
-                    <el-option label="已确认" value="confirmed" />
-                  </el-select>
-                </div>
-                <el-row :gutter="12">
-                  <el-col :span="6"><el-input v-model="item.project" placeholder="项目" /></el-col>
-                  <el-col :span="6"><el-input v-model="item.module" placeholder="模块" /></el-col>
-                  <el-col :span="8"><el-input v-model="item.api_path" placeholder="接口路径" /></el-col>
-                  <el-col :span="4">
-                    <el-select v-model="item.method" clearable placeholder="方法">
-                      <el-option label="GET" value="GET" />
-                      <el-option label="POST" value="POST" />
-                      <el-option label="PUT" value="PUT" />
-                      <el-option label="PATCH" value="PATCH" />
-                      <el-option label="DELETE" value="DELETE" />
-                    </el-select>
-                  </el-col>
-                </el-row>
-                <el-form-item label="前置条件"><el-input v-model="item.precondition" type="textarea" :rows="2" /></el-form-item>
-                <el-form-item label="步骤"><el-input v-model="item.steps" type="textarea" :rows="4" /></el-form-item>
-                <el-form-item label="预期结果"><el-input v-model="item.expected_result" type="textarea" :rows="3" /></el-form-item>
-                <div class="case-footer">
-                  <el-tag type="info">{{ item.source }}</el-tag>
-                  <el-button :icon="Check" type="success" @click="emit('save-case', item)">保存</el-button>
-                </div>
-              </el-form>
-            </el-card>
-            <el-empty v-if="!cases.length" description="暂无测试用例草稿" />
-          </div>
-        </el-tab-pane>
-
         <el-tab-pane label="AI 问答" name="chat">
           <KnowledgeChat :document="document" @select-document="emit('select-document', $event)" />
         </el-tab-pane>
@@ -131,24 +85,20 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, MagicStick, Refresh } from '@element-plus/icons-vue'
+import { Refresh } from '@element-plus/icons-vue'
 import KnowledgeChat from './KnowledgeChat.vue'
-import type { KnowledgeDocument, TestCaseDraft } from '../api/types'
+import type { KnowledgeDocument } from '../api/types'
 
 const props = defineProps<{
   document: KnowledgeDocument | null
-  cases: TestCaseDraft[]
   loading: boolean
 }>()
 
 const emit = defineEmits<{
-  generate: [maxCases: number]
-  'save-case': [item: TestCaseDraft]
   'select-document': [documentId: number]
   reindex: [documentId: number]
 }>()
 
-const maxCases = ref(8)
 const activeTab = ref('overview')
 const tagList = computed(() => (props.document?.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean))
 

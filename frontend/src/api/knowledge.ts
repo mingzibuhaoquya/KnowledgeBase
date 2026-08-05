@@ -12,8 +12,7 @@ import type {
   ModelTestResponse,
   ParseJob,
   QualityIssue,
-  SearchResult,
-  TestCaseDraft
+  SearchResult
 } from './types'
 
 export async function listDocuments(params: {
@@ -39,21 +38,6 @@ export async function uploadDocument(payload: FormData) {
 
 export async function reindexDocument(documentId: number) {
   const { data } = await api.post<KnowledgeDocument>(`/documents/${documentId}/reindex`)
-  return data
-}
-
-export async function listCases(documentId: number) {
-  const { data } = await api.get<TestCaseDraft[]>(`/test-cases/document/${documentId}`)
-  return data
-}
-
-export async function generateCases(documentId: number, maxCases = 8) {
-  const { data } = await api.post<TestCaseDraft[]>(`/test-cases/generate/${documentId}`, { max_cases: maxCases })
-  return data
-}
-
-export async function updateCase(item: TestCaseDraft) {
-  const { data } = await api.put<TestCaseDraft>(`/test-cases/${item.id}`, item)
   return data
 }
 

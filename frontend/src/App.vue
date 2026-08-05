@@ -3,7 +3,7 @@
     <section class="topbar">
       <div>
         <h1>研发测试知识库</h1>
-        <p>需求沉淀、接口检索、AI 问答、来源引用和测试用例草稿。</p>
+        <p>需求沉淀、接口检索、AI 问答和来源引用。</p>
       </div>
       <div class="top-actions">
         <el-tag v-if="currentUser" type="success">{{ currentUser.username }} / {{ currentUser.role }}</el-tag>
@@ -29,10 +29,7 @@
           />
           <DocumentDetail
             :document="activeDocument"
-            :cases="cases"
             :loading="detailLoading"
-            @generate="handleGenerate"
-            @save-case="handleSaveCase"
             @select-document="openDocument"
             @reindex="handleReindex"
           />
@@ -41,11 +38,7 @@
 
       <el-tab-pane label="AI 问答" name="chat">
         <section class="full-panel">
-          <KnowledgeChat
-            v-if="activeDocument"
-            :document="activeDocument"
-            @select-document="openDocument"
-          />
+          <KnowledgeChat v-if="activeDocument" :document="activeDocument" @select-document="openDocument" />
           <el-empty v-else description="请先选择一个文档，或在知识工作台中检索。" />
         </section>
       </el-tab-pane>
@@ -58,10 +51,7 @@
     <el-drawer v-model="detailVisible" size="72%" title="知识详情">
       <DocumentDetail
         :document="activeDocument"
-        :cases="cases"
         :loading="detailLoading"
-        @generate="handleGenerate"
-        @save-case="handleSaveCase"
         @select-document="openDocument"
         @reindex="handleReindex"
       />
@@ -83,13 +73,12 @@ import DocumentPanel from './components/DocumentPanel.vue'
 import KnowledgeChat from './components/KnowledgeChat.vue'
 import KnowledgeWorkbench from './components/KnowledgeWorkbench.vue'
 import LoginDialog from './components/LoginDialog.vue'
-import { generateCases, getDocument, listCases, listDocuments, reindexDocument, updateCase } from './api/knowledge'
-import type { KnowledgeDocument, KnowledgeDocumentListItem, TestCaseDraft, User } from './api/types'
+import { getDocument, listDocuments, reindexDocument } from './api/knowledge'
+import type { KnowledgeDocument, KnowledgeDocumentListItem, User } from './api/types'
 
 const activeView = ref('workbench')
 const documents = ref<KnowledgeDocumentListItem[]>([])
 const activeDocument = ref<KnowledgeDocument | null>(null)
-const cases = ref<TestCaseDraft[]>([])
 const documentLoading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
@@ -110,7 +99,6 @@ async function openDocument(id: number) {
   detailLoading.value = true
   try {
     activeDocument.value = await getDocument(id)
-    cases.value = await listCases(id)
     detailVisible.value = activeView.value !== 'documents'
   } finally {
     detailLoading.value = false
@@ -121,25 +109,6 @@ async function handleUploaded(documentId: number) {
   await loadDocuments()
   await openDocument(documentId)
   activeView.value = 'documents'
-}
-
-async function handleGenerate(maxCases: number) {
-  if (!activeDocument.value) return
-  detailLoading.value = true
-  try {
-    cases.value = await generateCases(activeDocument.value.id, maxCases)
-    await loadDocuments()
-    ElMessage.success('测试用例草稿已生成')
-  } finally {
-    detailLoading.value = false
-  }
-}
-
-async function handleSaveCase(item: TestCaseDraft) {
-  const saved = await updateCase(item)
-  const index = cases.value.findIndex((entry) => entry.id === saved.id)
-  if (index >= 0) cases.value[index] = saved
-  ElMessage.success('用例已保存')
 }
 
 async function handleReindex(documentId: number) {

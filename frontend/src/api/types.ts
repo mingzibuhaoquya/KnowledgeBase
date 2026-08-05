@@ -70,24 +70,6 @@ export interface KnowledgeDocument extends KnowledgeDocumentListItem {
   parse_jobs: ParseJob[]
 }
 
-export interface TestCaseDraft {
-  id: number
-  document_id: number
-  title: string
-  priority: string
-  precondition: string
-  steps: string
-  expected_result: string
-  project: string | null
-  module: string | null
-  api_path: string | null
-  method: string | null
-  source: string
-  status: string
-  created_at: string
-  updated_at: string
-}
-
 export interface AIConfig {
   id: number
   provider: string
