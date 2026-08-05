@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import ChatFeedback, ChatMessage, ChatSession, KnowledgeDocument
+from app.models import ChatFeedback, ChatMessage, ChatSession, DocumentChunk, KnowledgeDocument
 from app.schemas import (
     ChatAskRequest,
     ChatAskResponse,
@@ -56,15 +56,17 @@ def ask_knowledge(payload: ChatAskRequest, db: Session = Depends(get_db)) -> Cha
         limit=payload.top_k,
     )
     if not hits and target_document_id:
+        hits = knowledge_search.search(db, payload.question, limit=payload.top_k)
+    if not hits and target_document_id:
         document = db.get(KnowledgeDocument, target_document_id)
         if document:
-            hits = knowledge_search.search(db, document.title, document_id=target_document_id, limit=payload.top_k)
+            hits = knowledge_search.search(db, document.title, limit=payload.top_k)
 
     sources = [
         ChatSourceOut(document_id=hit.document.id, chunk_id=hit.chunk_id, title=hit.document.title, snippet=hit.snippet)
         for hit in hits
     ]
-    context_blocks = [f"[{source.title}]\n{source.snippet}" for source in sources]
+    context_blocks = [_context_block(db, source) for source in sources]
     answer_text, answer_source = llm_service.answer(db, payload.question, context_blocks)
 
     question = ChatMessage(session_id=session.id, role="user", content=payload.question, document_id=target_document_id, sources="[]")
@@ -84,6 +86,15 @@ def ask_knowledge(payload: ChatAskRequest, db: Session = Depends(get_db)) -> Cha
     db.refresh(answer)
 
     return ChatAskResponse(session=session, question=_message_out(question), answer=_message_out(answer), sources=sources)
+
+
+def _context_block(db: Session, source: ChatSourceOut) -> str:
+    content = source.snippet
+    if source.chunk_id:
+        chunk = db.get(DocumentChunk, source.chunk_id)
+        if chunk and chunk.content:
+            content = chunk.content
+    return f"[{source.title}#{source.chunk_id or 'document'}]\n{content}"
 
 
 @router.post("/messages/{message_id}/feedback", response_model=ChatFeedbackOut)
@@ -134,4 +145,3 @@ def _message_out(message: ChatMessage) -> ChatMessageOut:
         sources=sources,
         created_at=message.created_at,
     )
-

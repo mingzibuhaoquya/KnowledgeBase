@@ -69,7 +69,7 @@ import type { ChatMessage, KnowledgeDocument, SearchResult } from '../api/types'
 const props = defineProps<{ document: KnowledgeDocument }>()
 const emit = defineEmits<{ 'select-document': [documentId: number] }>()
 
-const scope = ref<'document' | 'all'>('document')
+const scope = ref<'document' | 'all'>('all')
 const searchText = ref('')
 const question = ref('')
 const asking = ref(false)
@@ -83,7 +83,7 @@ watch(
     sessionId.value = null
     messages.value = []
     searchResults.value = []
-    scope.value = 'document'
+    scope.value = 'all'
   }
 )
 
@@ -125,4 +125,3 @@ async function feedback(messageId: number, rating: string) {
   ElMessage.success('Feedback recorded')
 }
 </script>
-

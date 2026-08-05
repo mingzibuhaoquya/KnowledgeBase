@@ -219,11 +219,43 @@ class KnowledgeSearchService:
         keywords: list[str] = []
         for word in words:
             normalized = word.strip().lower()
-            if len(normalized) < 2 or normalized in seen:
+            if len(normalized) < 2:
                 continue
-            seen.add(normalized)
-            keywords.append(word.strip())
-        return keywords[:8]
+            for term in self._expand_keyword(word.strip()):
+                key = term.lower()
+                if len(key) < 2 or key in seen:
+                    continue
+                seen.add(key)
+                keywords.append(term)
+                if len(keywords) >= 12:
+                    return keywords
+        return keywords
+
+    def _expand_keyword(self, word: str) -> list[str]:
+        if not re.search(r"[\u4e00-\u9fff]", word):
+            return [word]
+        if len(word) <= 4:
+            return [word]
+
+        preferred = [
+            "企查查",
+            "接口",
+            "查询",
+            "失败",
+            "调用",
+            "系统",
+            "界面",
+            "报告",
+            "按钮",
+            "异常",
+            "错误",
+            "展示",
+            "需求",
+            "测试",
+        ]
+        terms = [term for term in preferred if term in word]
+        terms.extend(word[index : index + 2] for index in range(0, min(len(word) - 1, 10)))
+        return terms
 
 
 knowledge_search = KnowledgeSearchService()
