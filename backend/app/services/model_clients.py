@@ -59,7 +59,7 @@ class ChatModelClient(OpenAICompatibleClient):
             },
         ]
         payload = {"model": config.model, "messages": messages, "temperature": 0.2}
-        with httpx.Client(timeout=120) as client:
+        with httpx.Client(timeout=300) as client:
             response = client.post(url, headers=self._headers(config), json=payload)
             response.raise_for_status()
             data = response.json()
