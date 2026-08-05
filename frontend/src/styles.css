@@ -227,6 +227,7 @@ textarea {
   position: sticky;
   top: 16px;
   min-height: 0;
+  height: calc(100vh - 152px);
   max-height: calc(100vh - 152px);
   padding: 14px;
   overflow: hidden;
@@ -278,8 +279,13 @@ textarea {
 }
 
 .document-list {
-  flex: 1;
-  min-height: 260px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.document-list .el-scrollbar__wrap {
+  overflow-x: hidden;
 }
 
 .document-item {
@@ -608,6 +614,13 @@ textarea {
 
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .document-panel,
+  .detail-panel {
+    position: static;
+    height: auto;
+    max-height: none;
   }
 
   .command-center,

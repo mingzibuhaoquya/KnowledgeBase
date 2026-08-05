@@ -9,7 +9,9 @@ from app.schemas import ChatSourceOut
 from app.services.search import SearchHit
 
 
-FIELD_QUESTION_TERMS = ("入参", "出参", "参数", "字段", "请求", "响应", "返回", "报文")
+FIELD_QUESTION_TERMS = ("\u5165\u53c2", "\u51fa\u53c2", "\u53c2\u6570", "\u5b57\u6bb5", "\u8bf7\u6c42", "\u54cd\u5e94", "\u8fd4\u56de", "\u62a5\u6587")
+INTERFACE_TERM = "\u63a5\u53e3"
+QCC_TERM = "\u4f01\u67e5\u67e5"
 
 
 @dataclass
@@ -34,7 +36,7 @@ class InterfaceTable:
 
 
 def is_interface_field_question(question: str) -> bool:
-    return "接口" in question and any(term in question for term in FIELD_QUESTION_TERMS)
+    return INTERFACE_TERM in question and any(term in question for term in FIELD_QUESTION_TERMS)
 
 
 def augment_interface_hits(
@@ -63,16 +65,16 @@ def augment_interface_hits(
     )
     if document_id:
         query = query.where(KnowledgeDocument.id == document_id)
-    if "企查查" in question:
-        query = query.where(or_(KnowledgeDocument.title.like("%企查查%"), DocumentChunk.content.like("%企查查%"), DocumentChunk.title_path.like("%企查查%")))
+    if QCC_TERM in question:
+        query = query.where(or_(KnowledgeDocument.title.like(f"%{QCC_TERM}%"), DocumentChunk.content.like(f"%{QCC_TERM}%"), DocumentChunk.title_path.like(f"%{QCC_TERM}%")))
 
     table_hits: list[SearchHit] = []
-    for chunk, document in db.execute(query.order_by(DocumentChunk.chunk_index.asc()).limit(max(limit, 12))):
+    for chunk, document in db.execute(query.order_by(DocumentChunk.chunk_index.asc()).limit(max(limit * 2, 12))):
         content = chunk.content or ""
         score = 10000.0
-        if "REQUEST" in content and any(term in question for term in ("入参", "请求", "请求参数", "报文")):
+        if "REQUEST" in content and any(term in question for term in ("\u5165\u53c2", "\u8bf7\u6c42", "\u8bf7\u6c42\u53c2\u6570", "\u62a5\u6587")):
             score += 40
-        if "RESPONSE" in content and any(term in question for term in ("出参", "响应", "返回")):
+        if "RESPONSE" in content and any(term in question for term in ("\u51fa\u53c2", "\u54cd\u5e94", "\u8fd4\u56de")):
             score += 40
         table_hits.append(
             SearchHit(
@@ -113,14 +115,14 @@ def build_interface_answer(db: Session, question: str, sources: list[ChatSourceO
     if not tables:
         return None
 
-    wants_request = any(term in question for term in ("入参", "请求", "请求参数", "报文"))
-    wants_response = any(term in question for term in ("出参", "响应", "返回"))
+    wants_request = any(term in question for term in ("\u5165\u53c2", "\u8bf7\u6c42", "\u8bf7\u6c42\u53c2\u6570", "\u62a5\u6587"))
+    wants_response = any(term in question for term in ("\u51fa\u53c2", "\u54cd\u5e94", "\u8fd4\u56de"))
     if not wants_request and not wants_response:
         wants_request = wants_response = True
 
-    lines = ["根据文档中的接口字段表，找到以下结构化信息：", ""]
     grouped = _filter_groups_by_question(_group_tables(tables), question)
     relevant: list[InterfaceTable] = []
+    lines = ["\u6839\u636e\u6587\u6863\u4e2d\u7684\u63a5\u53e3\u5b57\u6bb5\u8868\uff0c\u627e\u5230\u4ee5\u4e0b\u7ed3\u6784\u5316\u4fe1\u606f\uff1a", ""]
     for index, group in enumerate(grouped, start=1):
         info_table = group[0]
         request_tables = [table for table in group if table.section.upper() == "REQUEST"]
@@ -135,23 +137,23 @@ def build_interface_answer(db: Session, question: str, sources: list[ChatSourceO
         relevant.extend(section_tables)
 
         if len(grouped) > 1:
-            lines.append(f"{index}. {info_table.interface_name or '文档片段未标明'}")
+            lines.append(f"{index}. {info_table.interface_name or '\u6587\u6863\u7247\u6bb5\u672a\u6807\u660e'}")
         else:
-            lines.append(f"接口名称：{info_table.interface_name or '文档片段未标明'}")
+            lines.append(f"\u63a5\u53e3\u540d\u79f0\uff1a{info_table.interface_name or '\u6587\u6863\u7247\u6bb5\u672a\u6807\u660e'}")
         if info_table.transaction_direction:
-            lines.append(f"交易方向：{info_table.transaction_direction}")
+            lines.append(f"\u4ea4\u6613\u65b9\u5411\uff1a{info_table.transaction_direction}")
         if info_table.interface_type:
-            lines.append(f"接口类型：{info_table.interface_type}")
+            lines.append(f"\u63a5\u53e3\u7c7b\u578b\uff1a{info_table.interface_type}")
 
         if wants_request:
-            lines.extend(["入参字段（REQUEST）："])
+            lines.extend(["\u5165\u53c2\u5b57\u6bb5\uff08REQUEST\uff09\uff1a"])
             lines.extend(_format_section(request_tables))
         if wants_response:
-            lines.extend(["出参字段（RESPONSE）："])
+            lines.extend(["\u51fa\u53c2\u5b57\u6bb5\uff08RESPONSE\uff09\uff1a"])
             lines.extend(_format_section(response_tables))
         lines.append("")
 
-    lines.append("来源：")
+    lines.append("\u6765\u6e90\uff1a")
     seen_sources = set()
     for table in relevant:
         key = (table.document_title, table.chunk_id)
@@ -164,7 +166,7 @@ def build_interface_answer(db: Session, question: str, sources: list[ChatSourceO
 
 
 def _matches_question_scope(question: str, source: ChatSourceOut, chunk: DocumentChunk) -> bool:
-    explicit_terms = ["企查查", "反洗钱", "黑名单", "档案", "征信", "授信", "合同"]
+    explicit_terms = [QCC_TERM, "\u53cd\u6d17\u94b1", "\u9ed1\u540d\u5355", "\u6863\u6848", "\u5f81\u4fe1", "\u6388\u4fe1", "\u5408\u540c"]
     terms = [term for term in explicit_terms if term in question]
     if not terms:
         return True
@@ -185,25 +187,23 @@ def _group_tables(tables: list[InterfaceTable]) -> list[list[InterfaceTable]]:
 
 
 def _filter_groups_by_question(groups: list[list[InterfaceTable]], question: str) -> list[list[InterfaceTable]]:
-    discriminators = ["报告申请", "报告结果", "异步推送", "申请", "结果", "异步", "推送", "新增", "WFS704"]
-    terms = [term for term in discriminators if term in question]
-    if not terms or len(groups) <= 1:
+    exact_patterns = [
+        ("\u62a5\u544a\u7533\u8bf7\u63a5\u53e3", "\u62a5\u544a\u7533\u8bf7"),
+        ("\u7533\u8bf7\u63a5\u53e3", "\u62a5\u544a\u7533\u8bf7"),
+        ("\u7ed3\u679c\u5f02\u6b65\u63a8\u9001\u63a5\u53e3", "\u7ed3\u679c\u5f02\u6b65\u63a8\u9001"),
+        ("\u5f02\u6b65\u63a8\u9001\u63a5\u53e3", "\u5f02\u6b65\u63a8\u9001"),
+        ("WFS704", "WFS704"),
+    ]
+    target_terms = [target for pattern, target in exact_patterns if pattern in question]
+    if not target_terms or len(groups) <= 1:
         return groups
 
-    scored: list[tuple[int, list[InterfaceTable]]] = []
+    matched = []
     for group in groups:
         names = " ".join(table.interface_name for table in group)
-        score = 0
-        for term in terms:
-            score += 3 if len(term) >= 4 and term in names else 0
-            score += 1 if len(term) < 4 and term in names else 0
-        scored.append((score, group))
-
-    max_score = max(score for score, _ in scored)
-    second_score = max((score for score, _ in scored if score < max_score), default=0)
-    if max_score <= 0 or max_score == second_score:
-        return groups
-    return [group for score, group in scored if score == max_score]
+        if any(term in names for term in target_terms):
+            matched.append(group)
+    return matched or groups
 
 
 def _parse_table(chunk: DocumentChunk, source: ChatSourceOut) -> InterfaceTable | None:
@@ -248,7 +248,7 @@ def _parse_field_row(line: str) -> InterfaceField | None:
 
 def _is_loop_marker(field_item: InterfaceField) -> bool:
     marker = f"{field_item.field_cn} {field_item.field_code}".upper()
-    return "REQUEST" in marker and "循环" in marker or "RESPONSE" in marker and "循环" in marker
+    return ("REQUEST" in marker and "\u5faa\u73af" in marker) or ("RESPONSE" in marker and "\u5faa\u73af" in marker)
 
 
 def _format_section(tables: list[InterfaceTable]) -> list[str]:
@@ -265,18 +265,18 @@ def _format_section(tables: list[InterfaceTable]) -> list[str]:
 
     if not fields:
         if has_table:
-            return ["- 文档中存在该方向的字段表，但当前片段未列出具体字段。"]
-        return ["- 当前检索到的上下文中未发现该方向字段表。"]
+            return ["- \u6587\u6863\u4e2d\u5b58\u5728\u8be5\u65b9\u5411\u7684\u5b57\u6bb5\u8868\uff0c\u4f46\u5f53\u524d\u7247\u6bb5\u672a\u5217\u51fa\u5177\u4f53\u5b57\u6bb5\u3002"]
+        return ["- \u5f53\u524d\u68c0\u7d22\u5230\u7684\u4e0a\u4e0b\u6587\u4e2d\u672a\u53d1\u73b0\u8be5\u65b9\u5411\u5b57\u6bb5\u8868\u3002"]
 
     return [
         "- "
-        + "；".join(
+        + "\uff1b".join(
             item
             for item in [
-                f"{field_item.field_cn}（{field_item.field_code}）" if field_item.field_code else field_item.field_cn,
-                f"长度：{field_item.length}" if field_item.length else "",
-                f"必输：{field_item.required}" if field_item.required else "",
-                f"说明：{field_item.description}" if field_item.description else "",
+                f"{field_item.field_cn}\uff08{field_item.field_code}\uff09" if field_item.field_code else field_item.field_cn,
+                f"\u957f\u5ea6\uff1a{field_item.length}" if field_item.length else "",
+                f"\u5fc5\u8f93\uff1a{field_item.required}" if field_item.required else "",
+                f"\u8bf4\u660e\uff1a{field_item.description}" if field_item.description else "",
             ]
             if item
         )
