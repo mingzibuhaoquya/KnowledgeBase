@@ -178,6 +178,38 @@ class AIConfigOut(BaseModel):
     updated_at: datetime
 
 
+class ModelConfigIn(BaseModel):
+    provider: str = "openai_compatible"
+    base_url: str = ""
+    api_key: str = ""
+    model: str = ""
+    dimension: int | None = None
+    enabled: bool = False
+
+
+class ModelConfigOut(BaseModel):
+    id: int
+    kind: str
+    provider: str
+    base_url: str
+    api_key_masked: str
+    model: str
+    dimension: int | None
+    enabled: bool
+    updated_at: datetime
+
+
+class ModelTestRequest(BaseModel):
+    text: str = "用一句话说明知识库连接测试成功。"
+
+
+class ModelTestResponse(BaseModel):
+    ok: bool
+    kind: str
+    message: str
+    detail: str = ""
+
+
 class SearchResultOut(BaseModel):
     document_id: int
     chunk_id: int | None = None

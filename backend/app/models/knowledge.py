@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -142,6 +142,21 @@ class AIConfig(Base):
     base_url: Mapped[str] = mapped_column(String(255), default="")
     api_key_encrypted: Mapped[str] = mapped_column(String(500), default="")
     model: Mapped[str] = mapped_column(String(120), default="")
+    enabled: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ModelConfig(Base):
+    __tablename__ = "model_configs"
+    __table_args__ = (UniqueConstraint("kind", name="uq_model_configs_kind"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(30), index=True)
+    provider: Mapped[str] = mapped_column(String(80), default="openai_compatible")
+    base_url: Mapped[str] = mapped_column(String(255), default="")
+    api_key_encrypted: Mapped[str] = mapped_column(String(500), default="")
+    model: Mapped[str] = mapped_column(String(120), default="")
+    dimension: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enabled: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

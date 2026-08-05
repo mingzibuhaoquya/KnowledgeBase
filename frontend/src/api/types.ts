@@ -98,6 +98,25 @@ export interface AIConfig {
   updated_at: string
 }
 
+export interface ModelConfig {
+  id: number
+  kind: 'chat' | 'embedding' | 'rerank'
+  provider: string
+  base_url: string
+  api_key_masked: string
+  model: string
+  dimension: number | null
+  enabled: boolean
+  updated_at: string
+}
+
+export interface ModelTestResponse {
+  ok: boolean
+  kind: string
+  message: string
+  detail: string
+}
+
 export interface SearchResult {
   document_id: number
   chunk_id: number | null

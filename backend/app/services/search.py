@@ -5,6 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models import DocumentChunk, KnowledgeDocument
+from app.services.model_clients import rerank_client
 from app.services.vector_store import vector_store
 
 
@@ -31,15 +32,17 @@ class KnowledgeSearchService:
         limit: int = 10,
     ) -> list[SearchHit]:
         keywords = self._keywords(query)
-        hits = self._mysql_hits(db, keywords, query, document_id, project, module, tags, limit * 2)
-        hits.extend(self._vector_hits(db, query, document_id, project, module, tags, limit))
+        candidates = self._mysql_hits(db, keywords, query, document_id, project, module, tags, limit * 2)
+        candidates.extend(self._vector_hits(db, query, document_id, project, module, tags, limit * 3))
 
         merged: dict[tuple[int, int | None], SearchHit] = {}
-        for hit in hits:
+        for hit in candidates:
             key = (hit.document.id, hit.chunk_id)
             if key not in merged or merged[key].score < hit.score:
                 merged[key] = hit
+
         ordered = sorted(merged.values(), key=lambda item: item.score, reverse=True)
+        ordered = self._rerank(db, query, ordered[: max(limit * 3, limit)])
         return ordered[:limit]
 
     def _mysql_hits(
@@ -108,7 +111,7 @@ class KnowledgeSearchService:
         limit: int,
     ) -> list[SearchHit]:
         hits: list[SearchHit] = []
-        for vector_hit in vector_store.search(query, limit=limit):
+        for vector_hit in vector_store.search(query, limit=limit, db=db):
             row = db.execute(
                 select(DocumentChunk, KnowledgeDocument)
                 .join(KnowledgeDocument, DocumentChunk.document_id == KnowledgeDocument.id)
@@ -132,7 +135,7 @@ class KnowledgeSearchService:
                     snippet=self._snippet(chunk.content, [query]),
                     score=80.0 + vector_hit.score * 20.0,
                     source="qdrant",
-                    match_reason="语义相似命中",
+                    match_reason="Semantic vector match",
                 )
             )
         return hits
@@ -155,7 +158,7 @@ class KnowledgeSearchService:
             score += haystack.count(keyword.lower()) * 5
             if keyword.lower() in (document.title or "").lower():
                 score += 20
-        reason = "标题/摘要/正文关键词命中" if keywords else "最近更新文档"
+        reason = "Keyword match in title, summary or content" if keywords else "Recently updated document"
         return SearchHit(
             document=document,
             snippet=self._snippet(document.summary or document.content_text or document.title, keywords or [query]),
@@ -176,8 +179,27 @@ class KnowledgeSearchService:
             snippet=self._snippet(chunk.content, keywords or [query]),
             score=score,
             source="chunk",
-            match_reason="知识切片关键词命中",
+            match_reason="Keyword match in knowledge chunk",
         )
+
+    def _rerank(self, db: Session, query: str, hits: list[SearchHit]) -> list[SearchHit]:
+        if len(hits) <= 1:
+            return hits
+        documents = [f"{hit.document.title}\n{hit.snippet}" for hit in hits]
+        reranked = rerank_client.rerank(db, query, documents)
+        if not reranked:
+            return hits
+        score_by_index = {item.index: item.score for item in reranked}
+        ordered: list[SearchHit] = []
+        missing: list[SearchHit] = []
+        for index, hit in enumerate(hits):
+            if index in score_by_index:
+                hit.score = 100.0 + score_by_index[index] * 100.0
+                hit.match_reason = f"Reranked by model; {hit.match_reason}"
+                ordered.append(hit)
+            else:
+                missing.append(hit)
+        return sorted(ordered, key=lambda item: item.score, reverse=True) + missing
 
     def _snippet(self, text: str, keywords: list[str], radius: int = 120) -> str:
         clean = re.sub(r"\s+", " ", text or "").strip()

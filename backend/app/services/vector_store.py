@@ -1,11 +1,11 @@
-import hashlib
-import math
 from dataclasses import dataclass
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import DocumentChunk
+from app.services.model_clients import embedding_client, local_hash_embedding
 
 
 @dataclass
@@ -15,19 +15,14 @@ class VectorHit:
 
 
 class VectorStore:
-    def embed(self, text: str) -> list[float]:
-        vector = [0.0] * settings.embedding_dimension
-        for token in text.split():
-            digest = hashlib.sha256(token.encode("utf-8")).digest()
-            index = int.from_bytes(digest[:2], "big") % settings.embedding_dimension
-            vector[index] += 1.0
-        norm = math.sqrt(sum(value * value for value in vector)) or 1.0
-        return [value / norm for value in vector]
+    def embed(self, text: str, db: Session | None = None) -> list[float]:
+        return embedding_client.embed(db, text)
 
-    def upsert_chunks(self, chunks: list[DocumentChunk]) -> None:
+    def upsert_chunks(self, chunks: list[DocumentChunk], db: Session | None = None) -> None:
         if not settings.qdrant_url or not chunks:
             return
-        self._ensure_collection()
+        sample_vector = self.embed(chunks[0].content, db)
+        self._ensure_collection(len(sample_vector))
         points = []
         for chunk in chunks:
             vector_id = f"chunk-{chunk.id}"
@@ -35,7 +30,7 @@ class VectorStore:
             points.append(
                 {
                     "id": vector_id,
-                    "vector": self.embed(chunk.content),
+                    "vector": self.embed(chunk.content, db),
                     "payload": {
                         "chunk_id": chunk.id,
                         "document_id": chunk.document_id,
@@ -48,13 +43,14 @@ class VectorStore:
         with httpx.Client(timeout=20) as client:
             client.put(url, json={"points": points}).raise_for_status()
 
-    def search(self, query: str, limit: int = 8) -> list[VectorHit]:
+    def search(self, query: str, limit: int = 8, db: Session | None = None) -> list[VectorHit]:
         if not settings.qdrant_url:
             return []
         url = f"{settings.qdrant_url.rstrip('/')}/collections/{settings.qdrant_collection}/points/search"
         try:
+            vector = self.embed(query, db)
             with httpx.Client(timeout=15) as client:
-                response = client.post(url, json={"vector": self.embed(query), "limit": limit, "with_payload": True})
+                response = client.post(url, json={"vector": vector, "limit": limit, "with_payload": True})
                 response.raise_for_status()
         except httpx.HTTPError:
             return []
@@ -65,9 +61,9 @@ class VectorStore:
                 hits.append(VectorHit(chunk_id=int(payload["chunk_id"]), score=float(item.get("score", 0))))
         return hits
 
-    def _ensure_collection(self) -> None:
+    def _ensure_collection(self, dimension: int | None = None) -> None:
         url = f"{settings.qdrant_url.rstrip('/')}/collections/{settings.qdrant_collection}"
-        payload = {"vectors": {"size": settings.embedding_dimension, "distance": "Cosine"}}
+        payload = {"vectors": {"size": dimension or settings.embedding_dimension, "distance": "Cosine"}}
         with httpx.Client(timeout=15) as client:
             exists = client.get(url)
             if exists.status_code == 404:
@@ -75,6 +71,8 @@ class VectorStore:
             else:
                 exists.raise_for_status()
 
+    def local_embed(self, text: str) -> list[float]:
+        return local_hash_embedding(text, settings.embedding_dimension)
+
 
 vector_store = VectorStore()
-

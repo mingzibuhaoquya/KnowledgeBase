@@ -34,7 +34,7 @@ class IndexingService:
         db.flush()
 
         try:
-            vector_store.upsert_chunks(chunks)
+            vector_store.upsert_chunks(chunks, db)
             db.flush()
         except Exception as exc:
             job.message = f"Indexed {len(chunks)} chunks. Qdrant skipped: {exc}"
@@ -42,4 +42,3 @@ class IndexingService:
 
 
 indexing_service = IndexingService()
-

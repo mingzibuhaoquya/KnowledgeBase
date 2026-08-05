@@ -8,6 +8,7 @@ from app.models.knowledge import (
     DocumentParseJob,
     DocumentVersion,
     KnowledgeDocument,
+    ModelConfig,
     TestCaseDraft,
     User,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "DocumentParseJob",
     "DocumentVersion",
     "KnowledgeDocument",
+    "ModelConfig",
     "TestCaseDraft",
     "User",
 ]

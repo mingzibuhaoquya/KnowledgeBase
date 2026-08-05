@@ -8,6 +8,8 @@ import type {
   KnowledgeDocument,
   KnowledgeDocumentListItem,
   LoginResponse,
+  ModelConfig,
+  ModelTestResponse,
   ParseJob,
   QualityIssue,
   SearchResult,
@@ -68,6 +70,31 @@ export async function saveAIConfig(payload: {
   enabled: boolean
 }) {
   const { data } = await api.put<AIConfig>('/ai-config', payload)
+  return data
+}
+
+export async function listModelConfigs() {
+  const { data } = await api.get<ModelConfig[]>('/model-configs')
+  return data
+}
+
+export async function saveModelConfig(
+  kind: ModelConfig['kind'],
+  payload: {
+    provider: string
+    base_url: string
+    api_key: string
+    model: string
+    dimension?: number | null
+    enabled: boolean
+  }
+) {
+  const { data } = await api.put<ModelConfig>(`/model-configs/${kind}`, payload)
+  return data
+}
+
+export async function testModelConfig(kind: ModelConfig['kind'], text: string) {
+  const { data } = await api.post<ModelTestResponse>(`/model-configs/${kind}/test`, { text })
   return data
 }
 
