@@ -21,14 +21,18 @@
         <section class="workspace">
           <DocumentPanel
             :documents="documents"
+            :projects="projects"
+            :active-project="activeProject"
             :active-id="activeDocument?.id"
             :loading="documentLoading"
+            @project-change="handleProjectChange"
             @search="loadDocuments"
             @uploaded="handleUploaded"
             @select="openDocument"
           />
           <DocumentDetail
             :document="activeDocument"
+            :similar-results="similarResults"
             :loading="detailLoading"
             @select-document="openDocument"
             @reindex="handleReindex"
@@ -51,6 +55,7 @@
     <el-drawer v-model="detailVisible" size="72%" title="知识详情">
       <DocumentDetail
         :document="activeDocument"
+        :similar-results="similarResults"
         :loading="detailLoading"
         @select-document="openDocument"
         @reindex="handleReindex"
@@ -73,12 +78,15 @@ import DocumentPanel from './components/DocumentPanel.vue'
 import KnowledgeChat from './components/KnowledgeChat.vue'
 import KnowledgeWorkbench from './components/KnowledgeWorkbench.vue'
 import LoginDialog from './components/LoginDialog.vue'
-import { getDocument, listDocuments, reindexDocument } from './api/knowledge'
-import type { KnowledgeDocument, KnowledgeDocumentListItem, User } from './api/types'
+import { findSimilarKnowledge, getDocument, listDocuments, listProjects, reindexDocument } from './api/knowledge'
+import type { KnowledgeDocument, KnowledgeDocumentListItem, ProjectSummary, SearchResult, User } from './api/types'
 
 const activeView = ref('workbench')
 const documents = ref<KnowledgeDocumentListItem[]>([])
+const projects = ref<ProjectSummary[]>([])
+const activeProject = ref<string>('')
 const activeDocument = ref<KnowledgeDocument | null>(null)
+const similarResults = ref<SearchResult[]>([])
 const documentCache = new Map<number, KnowledgeDocument>()
 const documentLoading = ref(false)
 const detailLoading = ref(false)
@@ -90,7 +98,7 @@ const currentUser = ref<User | null>(JSON.parse(localStorage.getItem('kb_user') 
 async function loadDocuments(keyword = '') {
   documentLoading.value = true
   try {
-    documents.value = await listDocuments({ keyword })
+    documents.value = await listDocuments({ keyword, project: activeProject.value || undefined })
   } finally {
     documentLoading.value = false
   }
@@ -104,6 +112,9 @@ async function openDocument(id: number) {
     if (!cached && activeDocument.value) {
       documentCache.set(id, activeDocument.value)
     }
+    similarResults.value = activeDocument.value
+      ? await findSimilarKnowledge({ document_id: activeDocument.value.id, project: activeDocument.value.project || undefined, limit: 6 })
+      : []
     detailVisible.value = activeView.value !== 'documents'
   } finally {
     detailLoading.value = false
@@ -112,9 +123,17 @@ async function openDocument(id: number) {
 
 async function handleUploaded(documentId: number) {
   documentCache.delete(documentId)
+  await loadProjects()
   await loadDocuments()
   await openDocument(documentId)
   activeView.value = 'documents'
+}
+
+async function handleProjectChange(project: string) {
+  activeProject.value = project
+  activeDocument.value = null
+  similarResults.value = []
+  await loadDocuments()
 }
 
 async function handleReindex(documentId: number) {
@@ -123,6 +142,7 @@ async function handleReindex(documentId: number) {
     const document = await reindexDocument(documentId)
     activeDocument.value = document
     documentCache.set(documentId, document)
+    similarResults.value = await findSimilarKnowledge({ document_id: document.id, project: document.project || undefined, limit: 6 })
     await loadDocuments()
     ElMessage.success('索引已重建')
   } finally {
@@ -130,9 +150,16 @@ async function handleReindex(documentId: number) {
   }
 }
 
+async function loadProjects() {
+  projects.value = await listProjects()
+}
+
 function handleLoggedIn(user: User) {
   currentUser.value = user
 }
 
-onMounted(loadDocuments)
+onMounted(async () => {
+  await loadProjects()
+  await loadDocuments()
+})
 </script>

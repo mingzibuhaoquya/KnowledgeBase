@@ -52,6 +52,52 @@ def search_knowledge(
     ]
 
 
+@router.get("/similar", response_model=list[SearchResultOut])
+def similar_knowledge(
+    q: str | None = None,
+    document_id: int | None = None,
+    project: str | None = None,
+    limit: int = 6,
+    db: Session = Depends(get_db),
+) -> list[SearchResultOut]:
+    query_text = (q or "").strip()
+    source_project = project
+    if document_id:
+        document = db.get(KnowledgeDocument, document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="document not found")
+        source_project = source_project or document.project
+        query_text = query_text or " ".join(
+            item
+            for item in [document.title, document.keywords, document.summary, document.module, document.tags]
+            if item
+        )
+    if not query_text:
+        raise HTTPException(status_code=400, detail="q or document_id is required.")
+
+    hits = knowledge_search.search(db, query_text, exclude_project=source_project, limit=min(limit * 3, 30))
+    if document_id:
+        hits = [hit for hit in hits if hit.document.id != document_id]
+    hits = hits[: min(limit, 20)]
+    return [
+        SearchResultOut(
+            document_id=hit.document.id,
+            chunk_id=hit.chunk_id,
+            title=hit.document.title,
+            original_filename=hit.document.original_filename,
+            project=hit.document.project,
+            module=hit.document.module,
+            tags=hit.document.tags,
+            snippet=hit.snippet,
+            score=hit.score,
+            source=hit.source,
+            match_reason=f"跨项目相似内容 / {hit.match_reason}",
+            created_at=hit.document.created_at,
+        )
+        for hit in hits
+    ]
+
+
 @router.post("/chat/sessions", response_model=ChatSessionOut)
 def create_chat_session(payload: ChatSessionCreate, db: Session = Depends(get_db)) -> ChatSession:
     session = ChatSession(title=payload.title, scope=payload.scope, document_id=payload.document_id)
@@ -76,6 +122,13 @@ def list_chat_messages(session_id: int, db: Session = Depends(get_db)) -> list[C
 def ask_knowledge(payload: ChatAskRequest, db: Session = Depends(get_db)) -> ChatAskResponse:
     session = _get_or_create_session(db, payload)
     target_document_id = payload.document_id or session.document_id
+    target_project = payload.project
+    target_module = payload.module
+    if target_document_id and not target_project:
+        document = db.get(KnowledgeDocument, target_document_id)
+        if document:
+            target_project = document.project
+            target_module = target_module or document.module
     if payload.scope == "document" and not target_document_id:
         raise HTTPException(status_code=400, detail="document_id is required when scope is document.")
 
@@ -83,6 +136,8 @@ def ask_knowledge(payload: ChatAskRequest, db: Session = Depends(get_db)) -> Cha
         db,
         payload.question,
         document_id=target_document_id if payload.scope in {"document", "auto"} and target_document_id else None,
+        project=target_project if payload.scope == "project" else None,
+        module=target_module if payload.scope == "project" and target_module else None,
         limit=payload.top_k,
     )
     if not hits and target_document_id:

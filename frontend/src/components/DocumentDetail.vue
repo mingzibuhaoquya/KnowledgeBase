@@ -50,6 +50,21 @@
               </div>
             </section>
           </div>
+          <section v-if="similarResults.length" class="similar-panel">
+            <div class="section-head">
+              <div>
+                <h3>{{ similarTitle }}</h3>
+                <span>{{ similarSubtitle }}</span>
+              </div>
+            </div>
+            <div class="result-list">
+              <button v-for="item in similarResults" :key="`${item.document_id}-${item.chunk_id}`" @click="emit('select-document', item.document_id)">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.project || '未设置项目' }} / {{ item.module || '未设置模块' }} / {{ item.match_reason }}</span>
+                <p>{{ item.snippet || item.original_filename }}</p>
+              </button>
+            </div>
+          </section>
         </el-tab-pane>
 
         <el-tab-pane label="解析内容" name="content">
@@ -97,10 +112,11 @@
 import { computed, ref, watch } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import KnowledgeChat from './KnowledgeChat.vue'
-import type { KnowledgeDocument } from '../api/types'
+import type { KnowledgeDocument, SearchResult } from '../api/types'
 
 const props = defineProps<{
   document: KnowledgeDocument | null
+  similarResults: SearchResult[]
   loading: boolean
 }>()
 
@@ -122,6 +138,11 @@ const parsedText = computed(() => {
   return `${text.slice(0, PREVIEW_LENGTH)}\n\n... 内容较长，已折叠后续文本。`
 })
 const visibleChunks = computed(() => props.document?.chunks.slice(0, chunkLimit.value) || [])
+const similarSubtitle = computed(() => {
+  if (props.document?.project) return '仅展示当前项目之外的相关知识，必要时可作为参考'
+  return '当前文档未设置项目，展示全库中相近的知识片段'
+})
+const similarTitle = computed(() => (props.document?.project ? '其他项目相似内容' : '相关相似内容'))
 
 watch(
   () => props.document?.id,

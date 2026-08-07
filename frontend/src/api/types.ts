@@ -70,6 +70,13 @@ export interface KnowledgeDocument extends KnowledgeDocumentListItem {
   parse_jobs: ParseJob[]
 }
 
+export interface ProjectSummary {
+  project: string
+  document_count: number
+  module_count: number
+  updated_at: string | null
+}
+
 export interface AIConfig {
   id: number
   provider: string

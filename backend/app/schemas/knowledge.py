@@ -125,6 +125,13 @@ class KnowledgeDocumentListItem(BaseModel):
     test_case_count: int = 0
 
 
+class ProjectSummaryOut(BaseModel):
+    project: str
+    document_count: int
+    module_count: int
+    updated_at: datetime | None = None
+
+
 class TestCaseDraftBase(BaseModel):
     title: str
     priority: str = "P2"
@@ -263,6 +270,8 @@ class ChatAskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     session_id: int | None = None
     document_id: int | None = None
+    project: str | None = None
+    module: str | None = None
     scope: str = "auto"
     top_k: int = Field(default=5, ge=1, le=12)
 

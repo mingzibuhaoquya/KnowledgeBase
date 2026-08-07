@@ -29,11 +29,12 @@ class KnowledgeSearchService:
         project: str | None = None,
         module: str | None = None,
         tags: str | None = None,
+        exclude_project: str | None = None,
         limit: int = 10,
     ) -> list[SearchHit]:
         keywords = self._keywords(query)
-        candidates = self._mysql_hits(db, keywords, query, document_id, project, module, tags, limit * 2)
-        candidates.extend(self._vector_hits(db, query, document_id, project, module, tags, limit * 3))
+        candidates = self._mysql_hits(db, keywords, query, document_id, project, module, tags, exclude_project, limit * 2)
+        candidates.extend(self._vector_hits(db, query, document_id, project, module, tags, exclude_project, limit * 3))
 
         merged: dict[tuple[int, int | None], SearchHit] = {}
         for hit in candidates:
@@ -54,6 +55,7 @@ class KnowledgeSearchService:
         project: str | None,
         module: str | None,
         tags: str | None,
+        exclude_project: str | None,
         limit: int,
     ) -> list[SearchHit]:
         doc_stmt = select(KnowledgeDocument)
@@ -64,6 +66,8 @@ class KnowledgeSearchService:
             filters.append(KnowledgeDocument.id == document_id)
         if project:
             filters.append(KnowledgeDocument.project == project)
+        if exclude_project:
+            filters.append(or_(KnowledgeDocument.project.is_(None), KnowledgeDocument.project != exclude_project))
         if module:
             filters.append(KnowledgeDocument.module == module)
         if tags:
@@ -108,6 +112,7 @@ class KnowledgeSearchService:
         project: str | None,
         module: str | None,
         tags: str | None,
+        exclude_project: str | None,
         limit: int,
     ) -> list[SearchHit]:
         hits: list[SearchHit] = []
@@ -123,6 +128,8 @@ class KnowledgeSearchService:
             if document_id and document.id != document_id:
                 continue
             if project and document.project != project:
+                continue
+            if exclude_project and document.project == exclude_project:
                 continue
             if module and document.module != module:
                 continue

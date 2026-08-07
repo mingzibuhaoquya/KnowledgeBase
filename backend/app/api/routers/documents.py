@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.models import DocumentChunk, DocumentImage, DocumentParseJob, DocumentVersion, KnowledgeDocument, TestCaseDraft, User
-from app.schemas import KnowledgeDocumentListItem, KnowledgeDocumentOut
+from app.schemas import KnowledgeDocumentListItem, KnowledgeDocumentOut, ProjectSummaryOut
 from app.services.auth import get_current_user
 from app.services.document_parser import document_parser
 from app.services.indexing import indexing_service
@@ -161,6 +161,30 @@ def list_documents(
             test_case_count=test_case_count or 0,
         )
         for document, image_count, chunk_count, test_case_count in rows
+    ]
+
+
+@router.get("/projects", response_model=list[ProjectSummaryOut])
+def list_projects(db: Session = Depends(get_db)) -> list[ProjectSummaryOut]:
+    rows = db.execute(
+        select(
+            KnowledgeDocument.project,
+            func.count(KnowledgeDocument.id).label("document_count"),
+            func.count(func.distinct(KnowledgeDocument.module)).label("module_count"),
+            func.max(KnowledgeDocument.updated_at).label("updated_at"),
+        )
+        .where(KnowledgeDocument.project.is_not(None), KnowledgeDocument.project != "")
+        .group_by(KnowledgeDocument.project)
+        .order_by(func.max(KnowledgeDocument.updated_at).desc())
+    ).all()
+    return [
+        ProjectSummaryOut(
+            project=project,
+            document_count=document_count or 0,
+            module_count=module_count or 0,
+            updated_at=updated_at,
+        )
+        for project, document_count, module_count, updated_at in rows
     ]
 
 

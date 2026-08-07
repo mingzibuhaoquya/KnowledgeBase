@@ -9,6 +9,14 @@
     </div>
 
     <div class="panel-actions">
+      <el-select
+        :model-value="activeProject"
+        clearable
+        placeholder="全部项目"
+        @update:model-value="(value: string) => emit('project-change', value || '')"
+      >
+        <el-option v-for="item in projects" :key="item.project" :label="`${item.project}（${item.document_count}）`" :value="item.project" />
+      </el-select>
       <el-input
         v-model="keyword"
         :prefix-icon="Search"
@@ -63,20 +71,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage, type UploadRequestOptions } from 'element-plus'
 import { Search, UploadFilled } from '@element-plus/icons-vue'
 import { uploadDocument } from '../api/knowledge'
-import type { KnowledgeDocumentListItem } from '../api/types'
+import type { KnowledgeDocumentListItem, ProjectSummary } from '../api/types'
 
-defineProps<{
+const props = defineProps<{
   documents: KnowledgeDocumentListItem[]
+  projects: ProjectSummary[]
+  activeProject: string
   activeId?: number
   loading: boolean
 }>()
 
 const emit = defineEmits<{
   search: [keyword: string]
+  'project-change': [project: string]
   uploaded: [documentId: number]
   select: [documentId: number]
 }>()
@@ -85,6 +96,14 @@ const keyword = ref('')
 const project = ref('')
 const module = ref('')
 const tags = ref('')
+
+watch(
+  () => props.activeProject,
+  (value) => {
+    if (value && !project.value) project.value = value
+  },
+  { immediate: true }
+)
 
 async function upload(options: UploadRequestOptions) {
   try {

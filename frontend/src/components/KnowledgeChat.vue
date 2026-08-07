@@ -22,9 +22,10 @@
     <section class="chat-toolbar">
       <el-radio-group v-model="scope" size="small">
         <el-radio-button label="document">当前文档</el-radio-button>
+        <el-radio-button label="project" :disabled="!document.project">当前项目</el-radio-button>
         <el-radio-button label="all">全库</el-radio-button>
       </el-radio-group>
-      <el-tag type="info">{{ scope === 'document' ? document.title : '全部文档' }}</el-tag>
+      <el-tag type="info">{{ scopeLabel }}</el-tag>
     </section>
 
     <el-scrollbar class="chat-history">
@@ -60,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Promotion, Search } from '@element-plus/icons-vue'
 import { askKnowledge, saveChatFeedback, searchKnowledge } from '../api/knowledge'
@@ -69,7 +70,7 @@ import type { ChatMessage, KnowledgeDocument, SearchResult } from '../api/types'
 const props = defineProps<{ document: KnowledgeDocument }>()
 const emit = defineEmits<{ 'select-document': [documentId: number] }>()
 
-const scope = ref<'document' | 'all'>('all')
+const scope = ref<'document' | 'project' | 'all'>(props.document.project ? 'project' : 'all')
 const searchText = ref('')
 const question = ref('')
 const asking = ref(false)
@@ -77,6 +78,11 @@ const sessionId = ref<number | null>(null)
 const messages = ref<ChatMessage[]>([])
 const searchResults = ref<SearchResult[]>([])
 const renderCache = new Map<string, string>()
+const scopeLabel = computed(() => {
+  if (scope.value === 'document') return documentTitle(props.document.title)
+  if (scope.value === 'project') return props.document.project ? `当前项目：${props.document.project}` : '当前项目'
+  return '全部文档'
+})
 
 watch(
   () => props.document.id,
@@ -85,7 +91,7 @@ watch(
     messages.value = []
     searchResults.value = []
     renderCache.clear()
-    scope.value = 'all'
+    scope.value = props.document.project ? 'project' : 'all'
   }
 )
 
@@ -94,7 +100,11 @@ async function runSearch() {
     searchResults.value = []
     return
   }
-  searchResults.value = await searchKnowledge(searchText.value.trim(), 8)
+  searchResults.value = await searchKnowledge(
+    searchText.value.trim(),
+    8,
+    scope.value === 'project' && props.document.project ? { project: props.document.project } : {}
+  )
 }
 
 async function ask() {
@@ -109,6 +119,8 @@ async function ask() {
       question: text,
       session_id: sessionId.value,
       document_id: scope.value === 'document' ? props.document.id : null,
+      project: scope.value === 'project' ? props.document.project : null,
+      module: scope.value === 'project' ? props.document.module : null,
       scope: scope.value,
       top_k: 5
     })
@@ -120,6 +132,10 @@ async function ask() {
   } finally {
     asking.value = false
   }
+}
+
+function documentTitle(title: string) {
+  return title.length > 28 ? `${title.slice(0, 28)}...` : title
 }
 
 async function feedback(messageId: number, rating: string) {

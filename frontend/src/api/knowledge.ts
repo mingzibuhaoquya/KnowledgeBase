@@ -11,6 +11,7 @@ import type {
   ModelConfig,
   ModelTestResponse,
   ParseJob,
+  ProjectSummary,
   QualityIssue,
   SearchResult
 } from './types'
@@ -28,6 +29,11 @@ export async function listDocuments(params: {
 
 export async function getDocument(id: number) {
   const { data } = await api.get<KnowledgeDocument>(`/documents/${id}`)
+  return data
+}
+
+export async function listProjects() {
+  const { data } = await api.get<ProjectSummary[]>('/documents/projects')
   return data
 }
 
@@ -82,8 +88,13 @@ export async function testModelConfig(kind: ModelConfig['kind'], text: string) {
   return data
 }
 
-export async function searchKnowledge(q: string, limit = 10) {
-  const { data } = await api.get<SearchResult[]>('/knowledge/search', { params: { q, limit } })
+export async function searchKnowledge(q: string, limit = 10, params: { project?: string; module?: string } = {}) {
+  const { data } = await api.get<SearchResult[]>('/knowledge/search', { params: { q, limit, ...params } })
+  return data
+}
+
+export async function findSimilarKnowledge(params: { q?: string; document_id?: number; project?: string; limit?: number }) {
+  const { data } = await api.get<SearchResult[]>('/knowledge/similar', { params })
   return data
 }
 
@@ -101,6 +112,8 @@ export async function askKnowledge(payload: {
   question: string
   session_id?: number | null
   document_id?: number | null
+  project?: string | null
+  module?: string | null
   scope: string
   top_k?: number
 }) {

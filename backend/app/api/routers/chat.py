@@ -47,6 +47,13 @@ def list_chat_messages(session_id: int, db: Session = Depends(get_db)) -> list[C
 def ask_knowledge(payload: ChatAskRequest, db: Session = Depends(get_db)) -> ChatAskResponse:
     session = _get_or_create_session(db, payload)
     target_document_id = payload.document_id or session.document_id
+    target_project = payload.project
+    target_module = payload.module
+    if target_document_id and not target_project:
+        document = db.get(KnowledgeDocument, target_document_id)
+        if document:
+            target_project = document.project
+            target_module = target_module or document.module
     if payload.scope == "document" and not target_document_id:
         raise HTTPException(status_code=400, detail="document_id is required when scope is document.")
 
@@ -54,6 +61,8 @@ def ask_knowledge(payload: ChatAskRequest, db: Session = Depends(get_db)) -> Cha
         db,
         payload.question,
         document_id=target_document_id if payload.scope in {"document", "auto"} and target_document_id else None,
+        project=target_project if payload.scope == "project" else None,
+        module=target_module if payload.scope == "project" and target_module else None,
         limit=payload.top_k,
     )
     if not hits and target_document_id:
