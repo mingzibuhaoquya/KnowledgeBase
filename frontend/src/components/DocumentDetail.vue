@@ -36,7 +36,7 @@
                   <el-tag :type="job.status === 'success' ? 'success' : job.status === 'running' ? 'warning' : 'danger'">
                     {{ stageText(job.stage) }} / {{ jobStatusText(job.status) }}
                   </el-tag>
-                  <span>{{ job.message }}</span>
+                  <span>{{ job.message || '暂无消息' }}</span>
                 </div>
               </div>
             </section>
@@ -53,7 +53,13 @@
         </el-tab-pane>
 
         <el-tab-pane label="解析内容" name="content">
-          <pre class="parsed-text">{{ document.content_text || '暂无解析文本' }}</pre>
+          <div class="parsed-toolbar">
+            <span>{{ document.content_text.length.toLocaleString() }} 字符</span>
+            <el-button v-if="isContentLong" size="small" @click="contentExpanded = !contentExpanded">
+              {{ contentExpanded ? '收起全文' : '展开全文' }}
+            </el-button>
+          </div>
+          <pre class="parsed-text">{{ parsedText }}</pre>
           <div v-if="document.images.length" class="image-list">
             <div v-for="image in document.images" :key="image.id" class="image-row">
               <el-tag>{{ image.filename }}</el-tag>
@@ -63,8 +69,12 @@
         </el-tab-pane>
 
         <el-tab-pane label="知识切片" name="chunks">
+          <div class="chunk-toolbar">
+            <span>共 {{ document.chunks.length }} 个切片，当前显示 {{ visibleChunks.length }} 个</span>
+            <el-button v-if="visibleChunks.length < document.chunks.length" size="small" @click="chunkLimit += 20">显示更多</el-button>
+          </div>
           <div class="chunk-list">
-            <el-card v-for="chunk in document.chunks" :key="chunk.id" shadow="never" class="chunk-card">
+            <el-card v-for="chunk in visibleChunks" :key="chunk.id" shadow="never" class="chunk-card">
               <div class="chunk-head">
                 <strong>#{{ chunk.chunk_index }} {{ chunk.title_path }}</strong>
                 <el-tag type="info">{{ chunk.keywords || '暂无关键词' }}</el-tag>
@@ -84,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import KnowledgeChat from './KnowledgeChat.vue'
 import type { KnowledgeDocument } from '../api/types'
@@ -99,8 +109,28 @@ const emit = defineEmits<{
   reindex: [documentId: number]
 }>()
 
+const PREVIEW_LENGTH = 12000
 const activeTab = ref('overview')
+const contentExpanded = ref(false)
+const chunkLimit = ref(30)
+
 const tagList = computed(() => (props.document?.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean))
+const isContentLong = computed(() => (props.document?.content_text.length || 0) > PREVIEW_LENGTH)
+const parsedText = computed(() => {
+  const text = props.document?.content_text || '暂无解析文本'
+  if (contentExpanded.value || text.length <= PREVIEW_LENGTH) return text
+  return `${text.slice(0, PREVIEW_LENGTH)}\n\n... 内容较长，已折叠后续文本。`
+})
+const visibleChunks = computed(() => props.document?.chunks.slice(0, chunkLimit.value) || [])
+
+watch(
+  () => props.document?.id,
+  () => {
+    contentExpanded.value = false
+    chunkLimit.value = 30
+    activeTab.value = 'overview'
+  }
+)
 
 function formatSize(size: number) {
   if (size < 1024) return `${size} B`

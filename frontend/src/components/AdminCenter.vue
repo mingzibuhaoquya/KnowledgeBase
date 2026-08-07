@@ -1,7 +1,10 @@
 <template>
   <section class="admin-center" v-loading="loading">
     <div class="section-head">
-      <h2>治理中心</h2>
+      <div>
+        <h2>治理中心</h2>
+        <span>解析任务、索引状态和知识质量巡检</span>
+      </div>
       <el-button :icon="Refresh" @click="load">刷新</el-button>
     </div>
 
@@ -19,6 +22,7 @@
             <span>{{ job.message || '暂无消息' }}</span>
             <el-button size="small" @click="retry(job.id)">重试</el-button>
           </div>
+          <el-empty v-if="!jobs.length" description="暂无任务" />
         </div>
       </section>
 
@@ -33,6 +37,7 @@
             <span>{{ issue.severity }} / {{ issue.type }}</span>
             <p>{{ issue.detail }}</p>
           </button>
+          <el-empty v-if="!issues.length" description="暂无质量问题" />
         </div>
       </section>
     </div>

@@ -5,7 +5,7 @@
         <el-input v-model="username" placeholder="admin" />
       </el-form-item>
       <el-form-item label="密码">
-        <el-input v-model="password" placeholder="admin123" show-password />
+        <el-input v-model="password" placeholder="admin123" show-password @keyup.enter="submit" />
       </el-form-item>
     </el-form>
     <template #footer>

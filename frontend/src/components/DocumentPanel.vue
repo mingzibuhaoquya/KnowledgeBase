@@ -1,8 +1,11 @@
 <template>
   <aside class="document-panel floating-panel">
     <div class="panel-title">
-      <strong>文档列表</strong>
-      <span>{{ documents.length }} 个文档</span>
+      <div>
+        <strong>文档列表</strong>
+        <p>上传、筛选和维护知识资产</p>
+      </div>
+      <span>{{ documents.length }} 个</span>
     </div>
 
     <div class="panel-actions">
@@ -14,7 +17,7 @@
         @keyup.enter="emit('search', keyword)"
         @clear="emit('search', '')"
       />
-      <el-button :icon="Search" @click="emit('search', keyword)" />
+      <el-button type="primary" :icon="Search" @click="emit('search', keyword)" />
     </div>
 
     <el-form class="upload-meta" label-position="top">
@@ -47,7 +50,8 @@
       >
         <span class="doc-title">{{ item.title }}</span>
         <span class="doc-meta">
-          {{ item.file_type.toUpperCase() }} / {{ formatSize(item.file_size) }} / {{ statusText(item.status) }}
+          <el-tag size="small" :type="statusTagType(item.status)">{{ statusText(item.status) }}</el-tag>
+          <span>{{ item.file_type.toUpperCase() }} / {{ formatSize(item.file_size) }}</span>
         </span>
         <span class="doc-meta">切片 {{ item.chunk_count }} / 图片 {{ item.image_count }}</span>
         <span class="doc-meta">{{ item.project || '未设置项目' }} / {{ item.module || '未设置模块' }}</span>
@@ -113,5 +117,12 @@ function statusText(status: string) {
     failed: '失败'
   }
   return map[status] || status
+}
+
+function statusTagType(status: string) {
+  if (status === 'indexed') return 'success'
+  if (status === 'failed') return 'danger'
+  if (status === 'parsing' || status === 'chunking') return 'warning'
+  return 'info'
 }
 </script>

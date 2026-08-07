@@ -87,8 +87,8 @@ const forms = reactive<ModelForm[]>([
   {
     kind: 'chat',
     label: 'Chat',
-    title: 'DeepSeek 对话模型',
-    description: '用于 RAG 问答、摘要、测试关注点生成。DeepSeek 只需要配置这里。',
+    title: '对话模型',
+    description: '用于 RAG 问答、摘要、知识归纳和测试关注点建议。',
     provider: 'openai_compatible',
     base_url: 'https://api.deepseek.com/v1',
     api_key: '',
@@ -104,7 +104,7 @@ const forms = reactive<ModelForm[]>([
     kind: 'embedding',
     label: 'Embedding',
     title: '嵌入模型',
-    description: '用于把文档切片和问题转换成向量，写入 Qdrant 做语义检索。',
+    description: '把文档切片和问题转换成向量，写入 Qdrant 做语义检索。',
     provider: 'openai_compatible',
     base_url: '',
     api_key: '',
@@ -113,14 +113,14 @@ const forms = reactive<ModelForm[]>([
     dimension: 1024,
     enabled: false,
     basePlaceholder: '供应商 OpenAI-compatible base URL',
-    modelPlaceholder: '例如 bge-m3 类 embedding 模型',
+    modelPlaceholder: '例如 BAAI/bge-m3',
     testText: '账号锁定规则是什么？'
   },
   {
     kind: 'rerank',
     label: 'Rerank',
     title: '重排模型',
-    description: '用于把关键词和语义检索候选重新排序，提高最终引用质量；可选。',
+    description: '对关键词和语义检索候选重新排序，提高最终引用质量；可选。',
     provider: 'openai_compatible',
     base_url: '',
     api_key: '',
@@ -200,8 +200,8 @@ async function test(form: ModelForm) {
 <style scoped>
 .config-summary {
   align-items: center;
-  background: #f7f9fc;
-  border: 1px solid #e6eaf2;
+  background: #f7fafb;
+  border: 1px solid #dfe8ef;
   border-radius: 8px;
   display: flex;
   justify-content: space-between;
@@ -210,7 +210,7 @@ async function test(form: ModelForm) {
 }
 
 .config-summary p {
-  color: #667085;
+  color: #607086;
   line-height: 1.6;
   margin: 4px 0 0;
 }

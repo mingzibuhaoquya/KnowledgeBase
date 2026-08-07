@@ -49,8 +49,9 @@
         <div class="compact-list">
           <button v-for="doc in overview?.recent_documents || []" :key="doc.id" @click="emit('select-document', doc.id)">
             <strong>{{ doc.title }}</strong>
-            <span>{{ doc.project || '未设置项目' }} / {{ doc.module || '未设置模块' }} / {{ doc.status }}</span>
+            <span>{{ doc.project || '未设置项目' }} / {{ doc.module || '未设置模块' }} / {{ statusText(doc.status) }}</span>
           </button>
+          <el-empty v-if="!overview?.recent_documents.length" description="暂无文档" />
         </div>
       </section>
 
@@ -64,6 +65,7 @@
             <strong>{{ space.project }}{{ space.module ? ` / ${space.module}` : '' }}</strong>
             <span>{{ space.document_count }} 个文档 / {{ space.chunk_count }} 个切片</span>
           </button>
+          <el-empty v-if="!overview?.spaces.length" description="暂无空间" />
         </div>
       </section>
 
@@ -77,6 +79,7 @@
             <strong>{{ message.content }}</strong>
             <span>{{ new Date(message.created_at).toLocaleString() }}</span>
           </button>
+          <el-empty v-if="!overview?.popular_questions.length" description="暂无问答记录" />
         </div>
       </section>
 
@@ -89,6 +92,7 @@
           <el-tag v-for="tag in overview?.tags || []" :key="tag.tag" type="info">
             {{ tag.tag }} / {{ tag.document_count }}
           </el-tag>
+          <el-empty v-if="!overview?.tags.length" description="暂无标签" />
         </div>
       </section>
     </div>
@@ -125,6 +129,18 @@ async function runSearch() {
   }
   searchResults.value = await searchKnowledge(query.value.trim(), 8)
   if (!searchResults.value.length) ElMessage.info('没有检索到匹配知识')
+}
+
+function statusText(status: string) {
+  const map: Record<string, string> = {
+    uploaded: '已上传',
+    parsing: '解析中',
+    parsed: '已解析',
+    chunking: '切片中',
+    indexed: '已索引',
+    failed: '失败'
+  }
+  return map[status] || status
 }
 
 onMounted(load)

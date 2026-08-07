@@ -1,14 +1,14 @@
 <template>
   <main class="app-shell">
     <section class="topbar">
-      <div>
+      <div class="brand-block">
         <h1>研发测试知识库</h1>
         <p>需求沉淀、接口检索、AI 问答和来源引用。</p>
       </div>
       <div class="top-actions">
-        <el-tag v-if="currentUser" type="success">{{ currentUser.username }} / {{ currentUser.role }}</el-tag>
+        <el-tag v-if="currentUser" type="success" effect="light">{{ currentUser.username }} / {{ currentUser.role }}</el-tag>
         <el-button :icon="UserIcon" @click="loginVisible = true">登录</el-button>
-        <el-button :icon="Setting" @click="configVisible = true">模型配置</el-button>
+        <el-button type="primary" plain :icon="Setting" @click="configVisible = true">模型配置</el-button>
       </div>
     </section>
 
@@ -79,6 +79,7 @@ import type { KnowledgeDocument, KnowledgeDocumentListItem, User } from './api/t
 const activeView = ref('workbench')
 const documents = ref<KnowledgeDocumentListItem[]>([])
 const activeDocument = ref<KnowledgeDocument | null>(null)
+const documentCache = new Map<number, KnowledgeDocument>()
 const documentLoading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
@@ -98,7 +99,11 @@ async function loadDocuments(keyword = '') {
 async function openDocument(id: number) {
   detailLoading.value = true
   try {
-    activeDocument.value = await getDocument(id)
+    const cached = documentCache.get(id)
+    activeDocument.value = cached || await getDocument(id)
+    if (!cached && activeDocument.value) {
+      documentCache.set(id, activeDocument.value)
+    }
     detailVisible.value = activeView.value !== 'documents'
   } finally {
     detailLoading.value = false
@@ -106,6 +111,7 @@ async function openDocument(id: number) {
 }
 
 async function handleUploaded(documentId: number) {
+  documentCache.delete(documentId)
   await loadDocuments()
   await openDocument(documentId)
   activeView.value = 'documents'
@@ -114,7 +120,9 @@ async function handleUploaded(documentId: number) {
 async function handleReindex(documentId: number) {
   detailLoading.value = true
   try {
-    activeDocument.value = await reindexDocument(documentId)
+    const document = await reindexDocument(documentId)
+    activeDocument.value = document
+    documentCache.set(documentId, document)
     await loadDocuments()
     ElMessage.success('索引已重建')
   } finally {

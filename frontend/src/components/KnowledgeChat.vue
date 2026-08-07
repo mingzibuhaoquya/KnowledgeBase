@@ -30,7 +30,7 @@
     <el-scrollbar class="chat-history">
       <div v-for="message in messages" :key="message.id" class="chat-message" :class="message.role">
         <div class="message-role">{{ message.role === 'user' ? '我' : '知识助手' }}</div>
-        <div class="message-content" v-html="renderMessage(message.content)" />
+        <div class="message-content" v-html="renderMessage(message)" />
         <div v-if="message.sources?.length" class="source-list">
           <button v-for="source in message.sources" :key="`${message.id}-${source.document_id}-${source.chunk_id}`" @click="emit('select-document', source.document_id)">
             {{ source.title }}{{ source.chunk_id ? ` #${source.chunk_id}` : '' }}
@@ -76,6 +76,7 @@ const asking = ref(false)
 const sessionId = ref<number | null>(null)
 const messages = ref<ChatMessage[]>([])
 const searchResults = ref<SearchResult[]>([])
+const renderCache = new Map<string, string>()
 
 watch(
   () => props.document.id,
@@ -83,6 +84,7 @@ watch(
     sessionId.value = null
     messages.value = []
     searchResults.value = []
+    renderCache.clear()
     scope.value = 'all'
   }
 )
@@ -125,8 +127,13 @@ async function feedback(messageId: number, rating: string) {
   ElMessage.success('反馈已记录')
 }
 
-function renderMessage(content: string) {
-  return renderMarkdownLite(content || '')
+function renderMessage(message: ChatMessage) {
+  const key = `${message.id}:${message.content}`
+  const cached = renderCache.get(key)
+  if (cached) return cached
+  const rendered = renderMarkdownLite(message.content || '')
+  renderCache.set(key, rendered)
+  return rendered
 }
 
 function renderMarkdownLite(content: string) {
